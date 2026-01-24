@@ -117,6 +117,7 @@
     <Compile Include="Encounters\IBossEncounter.cs" />
     <Compile Include="Encounters\LaceEncounter.cs" />
     <Compile Include="Encounters\LaceSecondEncounter.cs" />
+    <Compile Include="Encounters\SavageBeastflyEncounter.cs" />
     <Compile Include="Vision\ResolutionDiagnostics.cs" />
     <Compile Include="RLManager.cs" />
     <Compile Include="Vision\ScreenCapture.cs" />

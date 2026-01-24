@@ -123,6 +123,8 @@ namespace SilksongRL
                     return new LaceEncounter();
                 case "Lace_2":
                     return new LaceSecondEncounter();
+                case "Savage_Beastfly":
+                    return new SavageBeastflyEncounter();
                 default:
                     return null;
             }
