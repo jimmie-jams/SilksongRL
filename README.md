@@ -2,6 +2,18 @@
 
 Reinforcement learning system for training AI agents to play Hollow Knight: Silksong boss encounters.
 
+## Encounters
+
+### (✅= Defeated, 🔲= Pending)
+
+<br>
+
+✅ **Lace 1**
+
+🔲 **Lace 2**
+
+🔲 **Savage Beastfly**
+
 ## Overview
 
 This project combines a Unity mod with a Python-based RL training pipeline to teach agents how to fight bosses using PPO (Proximal Policy Optimization). Still working on extending this to other RL algorithms.
