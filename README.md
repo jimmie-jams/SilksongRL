@@ -38,11 +38,11 @@ The Unity mod communicates with the Python socket server:
 ### Prerequisites to run training:
 
 - **Hollow Knight: Silksong** (game installation)
-- **BepInEx 5.4.x** in your Silksong directory (https://www.nexusmods.com/hollowknightsilksong/mods/26)
+- **BepInEx 5.4.x** in your Silksong directory (https://thunderstore.io/c/hollow-knight-silksong/p/BepInEx/BepInExPack_Silksong/)
 - **Debug Mod** in your BepInEx plugins folder (https://github.com/hk-speedrunning/Silksong.DebugMod)
 - **Python 3.11**
 
-### (Optinoal) If you want to build the mod yourself as well you'll also need:
+### (Optional) If you want to build the mod yourself as well you'll also need:
 
 - **.NET Framework 4.7.2** 
 - **Build system that supports MSBuild projects** (e.g. Visual Studio)
