@@ -12,7 +12,7 @@ obs_dim: Optional[int] = None
 action_shape: Optional[List[int]] = None
 current_boss: Optional[str] = None
 obs_type: Optional[str] = None          # 'vector' or 'hybrid'
-vector_obs_dim: Optional[int] = None    # Size of vector portion (for hybrid, this is before visual data)
+vector_obs_dim: Optional[int] = None    # Size of vector portion
 visual_width: Optional[int] = None      # Width of visual observation (0 if vector-only)
 visual_height: Optional[int] = None     # Height of visual observation (0 if vector-only)
 
@@ -96,10 +96,6 @@ def initialize_model(
     vector_obs_dim = vector_obs_size
     visual_width = visual_w
     visual_height = visual_h
-
-    # Default to basic action space if not provided
-    if action_space_shape is None:
-        action_space_shape = [3, 3, 2, 2]
     action_shape = action_space_shape
 
     normalized_boss_name = normalize_boss_name(boss_name)
@@ -120,10 +116,9 @@ def initialize_model(
         visual_h=visual_h
     )
     
-    # Choose policy based on observation type
+
     if observation_type == "hybrid" and visual_w > 0:
         policy = "MultiInputPolicy"
-        # CNN for visual, MLP for vector, then combined
         policy_kwargs = dict(
             net_arch=[256, 256, 128],
         )
@@ -159,6 +154,11 @@ def initialize_model(
             policy_kwargs=policy_kwargs,
         )
         checkpoint_loaded = False
+        
+        model_dir = os.path.dirname(checkpoint_path)
+        os.makedirs(model_dir, exist_ok=True)
+        model.save(checkpoint_path.replace(".zip", ""))
+        print(f"[RLCore] Saved initial checkpoint: {checkpoint_path}")
 
     return {
         "initialized": True,
