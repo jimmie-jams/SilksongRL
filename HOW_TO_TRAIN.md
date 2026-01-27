@@ -41,7 +41,7 @@ Make sure to give yourself ten masks, as the health normalization is set up to w
 
 ## NAVIGATE TO THE DESIRED ENCOUNTER
 
-Unfortunately, you'll have to get to the boss you want to fight manually. Only the first time, though! Promise.
+Unfortunately, you'll have to get to the boss you want to fight manually. Only the first time, though! Promise. The DebugMod has a very helpful noclip mode that you can use to phase through walls and get to where you want quickly.
 (In the future, I might look into providing ready SaveState information so you can open it straight up from there but if you're reading this it's not available yet)
 
 
