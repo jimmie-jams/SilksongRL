@@ -110,15 +110,6 @@ The Unity mod communicates with the Python socket server:
 
 ### Running the System
 
-0. On first run, the mod will create a config file in `BepInEx/config` with default
-target boss Lace 1. Open the file and edit to the desired encounter.
-1. Start the Python socket server (as described above)
-2. Launch Hollow Knight: Silksong
-3. The mod will automatically connect to the server
-4. Navigate to selected boss encounter in-game and set your save state in the arena through the Debug mod. Activate Load State on Death option.
-5. Press P to hand over control to the agent.
-
-Note:
-Boss fight triggers are different from boss to boss so you might need to check {Boss}Encounter.cs to figure out how to actually begin the fight. For now you may need to manually begin the first episode and then hand over control. After that the training should continue on its own. This is a limitation of relying on the Debug mode for resetting.
+Please consult [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)
 
 
