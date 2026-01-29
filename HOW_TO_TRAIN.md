@@ -94,3 +94,6 @@ and set TargetBoss to the one you want.
 
 - As this system runs in real time rather than assuming full control of the game, there will be slight deviations in the latency with which things run on different machines. This shouldn't cause too big of an issue. That being said, performance may degrade slightly if we try a model that is used to a certain amount of ms on an environment with less or more.
 
+- To play, the agent relies on key presses. This means that if you don't have the default key bindings, it will be pressing the wrong buttons.
+
+- For encounters that have a visual observation, your resolution and video settings matter. On a different aspect ratio or with more/less particles, shadows etc. the agent's input will not be the same. I'm not quite sure how catastrophic this would be for performance but it will most definitely have an effect. 
