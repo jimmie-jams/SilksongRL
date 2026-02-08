@@ -83,6 +83,8 @@ namespace SilksongRL
         private const int READ_TIMEOUT_MS = 30000;
         
         private readonly SemaphoreSlim socketLock = new SemaphoreSlim(1, 1);
+        
+        private float lastPingMs = 0f;
 
         public bool IsConnected => isConnected && client?.Connected == true;
 
@@ -215,9 +217,14 @@ namespace SilksongRL
                 StateRequest request = new StateRequest { state = observations };
                 string json = JsonUtility.ToJson(request);
 
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                
                 await SendMessageAsync(MessageType.GetAction, json).ConfigureAwait(false);
 
                 var (msgType, responseJson) = await ReceiveMessageAsync().ConfigureAwait(false);
+                
+                stopwatch.Stop();
+                lastPingMs = (float)stopwatch.Elapsed.TotalMilliseconds * Time.timeScale;
 
                 if (msgType == MessageType.ActionResponse)
                 {

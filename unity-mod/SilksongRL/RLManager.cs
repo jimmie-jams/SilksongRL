@@ -195,6 +195,33 @@ namespace SilksongRL
             }
         }
 
+        private GUIStyle pingStyle;
+        
+        private void OnGUI()
+        {
+            if (client == null) return;
+            
+            if (pingStyle == null)
+            {
+                pingStyle = new GUIStyle(GUI.skin.label);
+                pingStyle.normal.textColor = Color.white;
+            }
+            
+            float ping = client.lastPingMs;
+            string pingText = $"{ping:F0} ms";
+            
+            float padding = 10f;
+            float width = 40f;
+            float height = 25f;
+            Rect rect = new Rect(Screen.width - width - padding, padding, width, height);
+            
+            GUI.color = Color.black;
+            GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), pingText, pingStyle);
+            
+            GUI.color = Color.white;
+            GUI.Label(rect, pingText, pingStyle);
+        }
+
         private void FixedUpdate()
         {
 

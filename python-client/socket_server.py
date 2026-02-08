@@ -42,8 +42,8 @@ class RLSocketServer:
             print("[SocketServer] Waiting for connection...")
             self.conn, addr = self.socket.accept()
             self.conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)
-            self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8192)
+            self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 131_072)
+            self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 131_072)
             print(f"[SocketServer] Connected by {addr}")
             self.handle_client()
 
@@ -63,19 +63,16 @@ class RLSocketServer:
             print("[SocketServer] Client disconnected")
 
     def receive_message(self):
-        # Read length prefix (4 bytes, big-endian)
         length_bytes = self._recv_exact(4)
         if not length_bytes:
             return None, None
         length = struct.unpack('>I', length_bytes)[0]
         
-        # Read message type (1 byte)
         msg_type_byte = self._recv_exact(1)
         if not msg_type_byte:
             return None, None
         msg_type = MessageType(msg_type_byte[0])
         
-        # Read payload
         payload_length = length - 1
         payload = {}
         if payload_length > 0:
@@ -92,7 +89,6 @@ class RLSocketServer:
         self.conn.sendall(full_message)
 
     def _recv_exact(self, n: int) -> Optional[bytes]:
-        """Receive exactly n bytes."""
         data = b''
         while len(data) < n:
             chunk = self.conn.recv(n - len(data))
