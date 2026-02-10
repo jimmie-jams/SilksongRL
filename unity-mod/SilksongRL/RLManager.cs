@@ -5,6 +5,7 @@ using UnityEngine;
 using System;
 using System.Threading.Tasks;
 using HutongGames.PlayMaker.Actions;
+using UnityEngine.SceneManagement;
 
 namespace SilksongRL
 {
@@ -54,7 +55,9 @@ namespace SilksongRL
         {
             StaticLogger = Logger;
             StaticLogger.LogInfo("SilksongRL Mod loaded.");
-            
+
+            SceneManager.sceneLoaded += OnSceneLoaded;
+
             configHost = Config.Bind("Connection", "Host", "localhost", 
                 "Server hostname to connect to");
             configPort = Config.Bind("Connection", "Port", 8000, 
@@ -82,6 +85,13 @@ namespace SilksongRL
             };
             client = new SocketClient(socketConfig);
             StaticLogger.LogInfo($"[RL] Connecting to {configHost.Value}:{configPort.Value}");
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            RLManager.StaticLogger?.LogInfo($"[ScreenCapture] Scene loaded: {scene.name}");
+
+            if (scene.name == "Pre_Menu_Loader" || scene.name == "Pre_Menu_Intro") return;
 
             // Initialize encounter based on config
             currentEncounter = CreateEncounter(configTargetBoss.Value);
@@ -90,17 +100,9 @@ namespace SilksongRL
                 StaticLogger.LogError($"[RL] Unknown boss encounter: {configTargetBoss.Value}");
                 return;
             }
-            
-            episodeManager = new TrainingEpisodeManager(currentEncounter);
-            episodeManager.OnSimulateKeyPress = SimulateKeyPress;
-            episodeManager.OnResetComplete = ResetRL;
 
-            StaticLogger.LogInfo($"[RL] Initialized with encounter: {currentEncounter.GetEncounterName()}");
-            StaticLogger.LogInfo($"[RL] Observation size: {currentEncounter.GetObservationSize()}");
-            StaticLogger.LogInfo($"[RL] Action space: {CurrentActionSpaceType} ({ActionManager.GetActionSpaceShape(CurrentActionSpaceType).Length} actions)");
-            StaticLogger.LogInfo($"[RL] Mode: {(isInEval ? "Evaluation" : "Training")}");
-            
             // Initialize screen capture updater for hybrid encounters
+            // This isn't done in Awake because main camera isn't available yet
             if (currentEncounter.GetObservationType() == ObservationType.Hybrid)
             {
                 var screenCapture = currentEncounter.GetScreenCapture();
@@ -112,7 +114,18 @@ namespace SilksongRL
                 }
             }
             
+            episodeManager = new TrainingEpisodeManager(currentEncounter);
+            episodeManager.OnSimulateKeyPress = SimulateKeyPress;
+            episodeManager.OnResetComplete = ResetRL;
+
+            StaticLogger.LogInfo($"[RL] Initialized with encounter: {currentEncounter.GetEncounterName()}");
+            StaticLogger.LogInfo($"[RL] Observation size: {currentEncounter.GetObservationSize()}");
+            StaticLogger.LogInfo($"[RL] Action space: {CurrentActionSpaceType} ({ActionManager.GetActionSpaceShape(CurrentActionSpaceType).Length} actions)");
+            StaticLogger.LogInfo($"[RL] Mode: {(isInEval ? "Evaluation" : "Training")}");
+            
             _ = InitializeClientAsync();
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
         private IBossEncounter CreateEncounter(string bossName)
@@ -190,6 +203,7 @@ namespace SilksongRL
             // Log resolution diagnostics when pressing L
             if (Input.GetKeyDown(KeyCode.L))
             {
+                gameObject.AddComponent<ScreenCaptureTest>();
                 ResolutionDiagnostics.LogResolutionInfo(StaticLogger);
                 ResolutionDiagnostics.CheckForPotentialIssues(StaticLogger);
             }

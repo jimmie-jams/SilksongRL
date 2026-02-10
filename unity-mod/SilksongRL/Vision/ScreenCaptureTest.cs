@@ -60,6 +60,24 @@ namespace SilksongRL
             previewRect = new Rect(10, 10, CAPTURE_WIDTH * PREVIEW_SCALE, CAPTURE_HEIGHT * PREVIEW_SCALE);
         }
 
+        private void Start()
+        {
+            Camera cam = Camera.main;
+
+            Debug.Log($"[Debug] Camera: {cam.name}");
+            Debug.Log($"[Debug] Camera.targetTexture: {cam.targetTexture?.name ?? "null (renders to screen)"}");
+            Debug.Log($"[Debug] Camera.allowHDR: {cam.allowHDR}");
+            Debug.Log($"[Debug] Camera.actualRenderingPath: {cam.actualRenderingPath}");
+                
+            Camera[] allCams = Object.FindObjectsOfType<Camera>();
+            Debug.Log($"[Debug] Total cameras in scene: {allCams.Length}");
+            foreach (var c in allCams)
+            {
+                Debug.Log($"  - {c.name} (depth: {c.depth}, culling: {c.cullingMask})");
+            }
+            
+        }
+
         private void Update()
         {
             // F8: Capture and save to file

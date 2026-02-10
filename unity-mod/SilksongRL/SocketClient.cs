@@ -84,7 +84,7 @@ namespace SilksongRL
         
         private readonly SemaphoreSlim socketLock = new SemaphoreSlim(1, 1);
         
-        private float lastPingMs = 0f;
+        public float lastPingMs = 0f;
 
         public bool IsConnected => isConnected && client?.Connected == true;
 

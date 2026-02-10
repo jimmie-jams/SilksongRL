@@ -121,6 +121,7 @@
     <Compile Include="Vision\ResolutionDiagnostics.cs" />
     <Compile Include="RLManager.cs" />
     <Compile Include="Vision\ScreenCapture.cs" />
+    <Compile Include="Vision\ScreenCaptureOld.cs" />
     <Compile Include="Vision\ScreenCaptureTest.cs" />
     <Compile Include="Vision\ScreenCaptureUpdater.cs" />
     <Compile Include="SocketClient.cs" />
