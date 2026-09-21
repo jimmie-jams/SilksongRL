@@ -120,6 +120,9 @@
     <Compile Include="Encounters\SavageBeastflyEncounter.cs" />
     <Compile Include="Vision\ResolutionDiagnostics.cs" />
     <Compile Include="RLManager.cs" />
+    <Compile Include="SaveStates\DebugModSaveStates.cs" />
+    <Compile Include="SaveStates\EncounterSaveState.cs" />
+    <Compile Include="SaveStates\LethalDamagePatch.cs" />
     <Compile Include="Vision\ScreenCapture.cs" />
     <Compile Include="Vision\ScreenCaptureOld.cs" />
     <Compile Include="Vision\ScreenCaptureTest.cs" />

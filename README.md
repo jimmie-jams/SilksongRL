@@ -27,6 +27,7 @@ This project combines a Unity mod with a Python-based RL training pipeline to te
 **Components:**
 - **unity-mod/** - BepInEx mod that hooks into Silksong, captures game state, and executes agent actions
 - **python-client/** - Socket server that runs training for models and provides action predictions
+- **savestates/** - The savestates each encounter resets to
 
 ## Architecture
 
@@ -82,7 +83,13 @@ The Unity mod communicates with the Python socket server:
 
 ### Installing the mod
 
-   - Copy the built `SilksongRL.dll` and from `unity-mod/SilksongRL/bin/Debug/` (or `bin/Release/` if you built in Release configuration) to your game's `BepInEx/plugins/` directory (or the realease if you downloaded that instead)
+   - Copy the built `SilksongRL.dll` from `unity-mod/SilksongRL/bin/Debug/` (or `bin/Release/` if you built in Release configuration) into a folder of its own under your game's `BepInEx/plugins/` directory (or the release if you downloaded that instead)
+   - Copy the `savestates/` folder in next to the DLL. The mod looks for its savestates there:
+
+   ```
+   BepInEx/plugins/SilksongRL/SilksongRL.dll
+   BepInEx/plugins/SilksongRL/savestates/lace_1.json
+   ```
 
 
 ### Setting Up the Python Client

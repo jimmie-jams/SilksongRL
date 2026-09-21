@@ -25,8 +25,13 @@ The default starting encounter is Lace 1.
 <br>
 <br>
 
+> **Train on a save file you do not care about.** Every episode reset loads a savestate, and loading
+> a savestate overwrites the active save file with no undo - this is how DebugMod savestates work and
+> has nothing to do with SilksongRL specifically. Over a training run this happens thousands of times.
+> Make a throwaway save file for training and keep your real one well away from it.
+
 Once you open a savefile, the DebugMod overlay should appear, which looks like this (if it isn't on by default press F2 to activate).
-Make sure to give yourself ten masks, as the health normalization is set up to work with that many. It's not going to break if you don't do that but I would advise against it. Extra health means longer episodes means more learning.
+You do not need to set your masks or equipment up - the savestate the agent resets to already has ten masks and the right loadout baked in.
 
 <br>
 
@@ -39,37 +44,31 @@ Make sure to give yourself ten masks, as the health normalization is set up to w
 <img width="1617" height="914" alt="image" src="https://github.com/user-attachments/assets/f04117ca-20db-48b3-8bcc-10ae44b7bf26" />
 
 
-## NAVIGATE TO THE DESIRED ENCOUNTER
+## SAVESTATES
 
-Unfortunately, you'll have to get to the boss you want to fight manually. Only the first time, though! Promise. The DebugMod has a very helpful noclip mode that you can use to phase through walls and get to where you want quickly.
-(In the future, I might look into providing ready SaveState information so you can open it straight up from there but if you're reading this it's not available yet)
+Episode resets load a savestate. SilksongRL ships its own, as JSON in a `savestates` folder that sits
+next to `SilksongRL.dll`:
 
+```
+BepInEx/plugins/SilksongRL/SilksongRL.dll
+BepInEx/plugins/SilksongRL/savestates/lace_1.json
+```
 
-Once you have reached to the boss you need to get into a position that triggers the fight, pause and set your SaveState by pressing "Write", as shown below. I am using Lace 2 as an example here but this is the same for every boss.
+These are separate from DebugMod's savestate slots, so your own savestates, quickslot and DebugMod
+settings are never touched and you can keep using DebugMod normally while training runs.
 
-<img width="1611" height="905" alt="image" src="https://github.com/user-attachments/assets/e0ee151a-b4c6-4fb5-8499-7ebd5d27716c" />
+There is nothing to set up by hand. You do **not** need to press "Read", bind Quickslot (Load) to F5,
+or enable "Load Quickslot on Death" - the mod loads the savestate itself for agent deaths, wins and
+stuck resets alike. On startup the console confirms which one it picked up:
 
-<br>
-<br>
+```
+[Info   : SilksongRL] [SaveStates] Hooked DebugMod savestate loader (version 1.1.2)
+[Info   : SilksongRL] [RL] Resetting to "Lace_1_RL" from .../savestates/lace_1.json
+```
 
-Congratulations, you now have a SaveState! These persist across runs, so any time you want to return to this encounter you can do it with just a few clicks.
-If you now press "Read", it sets the selected SaveStatestate into your Quickslot.
-
-<img width="1607" height="896" alt="image" src="https://github.com/user-attachments/assets/0ae8f443-b798-48b5-931f-26e1a2e53b67" />
-
-<br>
-<br>
-
-Enable the "Load Quickslot on Death" setting by pressing the highlighted button. 
-
-<img width="1608" height="907" alt="image" src="https://github.com/user-attachments/assets/bb6e86ae-151e-4c56-81b2-e0969ee6f587" />
-
-<br>
-<br>
-
-Bind Quickslot (Load) to F5. This is how we reset when the agent wins.
-
-<img width="1616" height="913" alt="image" src="https://github.com/user-attachments/assets/5dcba72d-99ef-48ac-a3b2-1c54bfc77185" />
+If you see an error instead, training will refuse to start - episodes could never reset without a
+savestate. The error says whether the file was missing or DebugMod's loader could not be reached. To
+use a savestate from somewhere else, point `SavestateFile` in `BepInEx/config/silksongrl.cfg` at it.
 
 ## AND... TRAIN!
 

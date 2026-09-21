@@ -95,6 +95,14 @@ namespace SilksongRL
         /// </summary>
         float GetMaxHP();
 
+        /// <summary>
+        /// Name of the savestate JSON this encounter resets to, found in the "savestates" folder
+        /// next to SilksongRL.dll. Override with SavestateFile in BepInEx/config/silksongrl.cfg.
+        ///
+        /// These are SilksongRL's own savestates, kept separate from DebugMod's savestate slots.
+        /// </summary>
+        string GetSavestateFile();
+
 
         // NOTE:
         // The following three methods are not currently used.

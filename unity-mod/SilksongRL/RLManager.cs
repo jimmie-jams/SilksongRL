@@ -10,6 +10,10 @@ using UnityEngine.SceneManagement;
 namespace SilksongRL
 {
     [BepInPlugin("silksongrl", "SilksongRL", "1.0.0")]
+    // Soft dependency so BepInEx loads DebugMod before us and its savestate API is ready by the
+    // time DebugModSaveStates.Initialize() runs. Soft rather than hard so the plugin still loads
+    // and can report the problem itself, rather than being silently skipped by the chainloader.
+    [BepInDependency(DebugModSaveStates.DebugModGuid, BepInDependency.DependencyFlags.SoftDependency)]
     public class RLManager : BaseUnityPlugin
     {
         // Config entries
@@ -18,8 +22,17 @@ namespace SilksongRL
         private ConfigEntry<string> configTargetBoss;
         private ConfigEntry<float> configStepInterval;
         private ConfigEntry<bool> configEvalMode;
+        private ConfigEntry<string> configSavestateFile;
 
         public static bool isAgentControlEnabled = false;
+
+        /// <summary>
+        /// True only when we have a parsed savestate and can reset with it. LethalDamagePatch and
+        /// TrainingEpisodeManager both gate on this, so they can never disagree about who is
+        /// responsible for resets - cancelling killing blows without a way to reset would leave the
+        /// hero unkillable and the episode stuck.
+        /// </summary>
+        public static bool saveStateResetsActive = false;
         private bool isInEval;
 
         // Hero and Boss references (tracked via Harmony patches)
@@ -38,6 +51,7 @@ namespace SilksongRL
             currentEncounter?.GetActionSpaceType() ?? ActionSpaceType.Basic;
         
         private TrainingEpisodeManager episodeManager;
+        private EncounterSaveState encounterSaveState;
 
         private float[] previousObservations;
         private Action previousAction;
@@ -68,6 +82,9 @@ namespace SilksongRL
                 "Time interval between RL steps in seconds");
             configEvalMode = Config.Bind("Training", "EvalMode", false,
                 "If true, runs in evaluation mode (no training, just inference)");
+            configSavestateFile = Config.Bind("Training", "SavestateFile", "",
+                "Savestate to reset to. Either a file name inside the \"savestates\" folder next to " +
+                "SilksongRL.dll, or an absolute path. Empty uses the file the selected encounter asks for.");
             
             stepInterval = configStepInterval.Value;
             isInEval = configEvalMode.Value;
@@ -114,8 +131,9 @@ namespace SilksongRL
                 }
             }
             
-            episodeManager = new TrainingEpisodeManager(currentEncounter);
-            episodeManager.OnSimulateKeyPress = SimulateKeyPress;
+            SetUpSaveStateResets();
+
+            episodeManager = new TrainingEpisodeManager(currentEncounter, encounterSaveState);
             episodeManager.OnResetComplete = ResetRL;
 
             StaticLogger.LogInfo($"[RL] Initialized with encounter: {currentEncounter.GetEncounterName()}");
@@ -126,6 +144,38 @@ namespace SilksongRL
             _ = InitializeClientAsync();
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        /// <summary>
+        /// Loads SilksongRL's own savestate for this encounter, so resets never touch DebugMod's
+        /// savestates, quickslot or settings.
+        ///
+        /// Without a savestate there is no way to reset between episodes, so this is required:
+        /// agent control refuses to turn on until it succeeds.
+        /// </summary>
+        private void SetUpSaveStateResets()
+        {
+            DebugModSaveStates.Initialize();
+
+            encounterSaveState = new EncounterSaveState();
+
+            if (!DebugModSaveStates.IsAvailable)
+            {
+                StaticLogger.LogError("[RL] Training is unavailable without DebugMod's savestate loader.");
+                return;
+            }
+
+            if (encounterSaveState.TryLoadFromDisk(currentEncounter, configSavestateFile.Value))
+            {
+                saveStateResetsActive = true;
+                StaticLogger.LogInfo(
+                    $"[RL] Resetting to \"{encounterSaveState.StateName}\" from {encounterSaveState.SourcePath}");
+            }
+            else
+            {
+                StaticLogger.LogError(
+                    "[RL] Training is unavailable without a savestate to reset to. See the error above.");
+            }
         }
 
         private IBossEncounter CreateEncounter(string bossName)
@@ -195,6 +245,15 @@ namespace SilksongRL
             // Toggle control when pressing P
             if (Input.GetKeyDown(KeyCode.P))
             {
+                // Turning the agent loose without a way to reset would run one episode and then
+                // wedge, so refuse rather than half-work.
+                if (!isAgentControlEnabled && !saveStateResetsActive)
+                {
+                    StaticLogger.LogError(
+                        "[RL] Cannot enable agent control: no savestate to reset to, so episodes could never reset.");
+                    return;
+                }
+
                 isAgentControlEnabled = !isAgentControlEnabled;
                 
                 StaticLogger.LogInfo($"[RL] Agent control {(isAgentControlEnabled ? "enabled" : "disabled")}. Hero: {(Hero != null ? "Found" : "Not found")}, Boss: {(Boss != null ? "Found" : "Not found")}");
@@ -364,18 +423,6 @@ namespace SilksongRL
             // because we need to store the final transition with done=true on the first step of the new episode
             currentAction = new Action();
             isProcessingStep = false;
-        }
-
-        // Static flag for F5 simulation
-        public static bool simulateF5Press = false;
-
-        private void SimulateKeyPress(KeyCode key)
-        {
-            if (key == KeyCode.F5)
-            {
-                simulateF5Press = true;
-                StaticLogger.LogInfo("[RL] Simulating F5 key press");
-            }
         }
 
         /// <summary>

@@ -298,6 +298,13 @@ namespace SilksongRL
         {
             return MAX_BOSS_HP;
         }
+
+        // Savestate we reset to, in the savestates folder next to SilksongRL.dll.
+        // Recorded at a position that triggers the Lace 1 fight.
+        public string GetSavestateFile()
+        {
+            return "lace_1.json";
+        }
     }
 
 }
