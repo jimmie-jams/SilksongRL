@@ -314,8 +314,15 @@ namespace SilksongRL
             var previousState = episodeManager.CurrentState;
             episodeManager.UpdateEpisodeState(Hero, Boss);
             
-            // If we just transitioned to a death state, mark that we need to store a done transition
-            if (previousState == TrainingEpisodeManager.EpisodeState.Training && 
+            // If we just transitioned to a death state, mark that we need to store a done transition.
+            //
+            // hasPreviousStep gates this: the flag is only meaningful if there is a previous step to
+            // attach it to. Enabling agent control outside the arena ends an "episode" immediately
+            // (Boss is null, so UpdateEpisodeState reports BossDead) and resets us into the fight,
+            // but nothing has been stepped yet. Without this guard the flag would survive the reset
+            // and mark the first real transition of the run done=true with a boss-kill reward.
+            if (hasPreviousStep &&
+                previousState == TrainingEpisodeManager.EpisodeState.Training && 
                 (episodeManager.CurrentState == TrainingEpisodeManager.EpisodeState.HeroDead || 
                  episodeManager.CurrentState == TrainingEpisodeManager.EpisodeState.BossDead ||
                  episodeManager.CurrentState == TrainingEpisodeManager.EpisodeState.HeroStuck))

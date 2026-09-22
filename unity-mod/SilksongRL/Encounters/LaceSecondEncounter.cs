@@ -187,7 +187,7 @@ namespace SilksongRL
             float bossHPLoss = prevBossHP - currBossHP;
             float heroHPLoss = prevHeroHP - currHeroHP;
 
-            reward += bossHPLoss * 2.0f;
+            reward += bossHPLoss * 1.2f;
             reward -= heroHPLoss * 15.0f;
 
             // Position-based shaping
@@ -210,7 +210,7 @@ namespace SilksongRL
                 reward += distanceChange * 0.02f;
             }
 
-            // Discourage going below 5 (ends up in lava)
+            // Discourage going below 5 (ends up in void)
             if (currHeroY < 100f)
             {
                 reward -= 0.05f;
