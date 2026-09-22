@@ -3,16 +3,96 @@
 Here I will give an overview of how to actually run the training. This assumes you have followed the set up instructions in the README.
 
 
-## INITIALIZE THE SOCKET
+## START EVERYTHING
 
-To initialize the socket which enables the communication between Silksong and the training script you need to run the launch.py file from the python-client.
+From `python-client`, one command starts the training server and the game:
 
-You can run this however you like.
-Personally, I just do `start /B "" .venv\Scripts\python.exe launch.py` in the directory where the python-client is to start it as a background process.
+```bash
+python launch.py --boss Lace_1
+```
 
+`--boss` writes `TargetBoss` into the mod's config before launching, so you no longer need to edit
+`silksongrl.cfg` by hand to change encounter. Accepted names are `Lace_1`, `Lace_2` and
+`Savage_Beastfly` (spellings like `lace2` or `beastfly` work too).
 
-<img width="1919" height="1030" alt="image" src="https://github.com/user-attachments/assets/9e28422a-e8ec-47f7-8224-3711fb7bcd86" />
+The server has to be listening before the game starts, because the mod connects out to it and only
+retries a few times. The launcher handles that ordering for you - it waits for the socket to bind
+before starting the game.
 
+To see what it would do without starting anything:
+
+```bash
+python launch.py --dry-run --boss Lace_2
+```
+
+```
+[Launcher] Game:      /path/to/Hollow Knight Silksong (Windows build via Proton)
+[Launcher] BepInEx:   found
+[Launcher] Mod:       .../BepInEx/plugins/SilksongRL/SilksongRL.dll
+[Launcher] Savestates: lace_1.json, lace_2.json
+[Launcher] Encounter: Lace_1
+[Launcher] Transport: socket_sync on localhost:8000
+[Launcher] Would launch via: steam
+[Launcher] Would set: TargetBoss=Lace_2
+```
+
+That also warns you if BepInEx, the mod, or the savestates are missing, which is usually the reason
+a run does not start.
+
+### Useful options
+
+| Option | Effect |
+|--------|--------|
+| `--boss NAME` | Encounter to train on |
+| `--eval` / `--train` | Evaluation (inference only) or training mode |
+| `--step-interval S` | Seconds between RL steps |
+| `--port N` | Server port, set on both sides |
+| `--no-game` | Only run the server; start the game yourself |
+| `--dry-run` | Report and exit |
+| `--launch-mode` | `proton`, `steam` or `direct`, if the automatic choice is wrong |
+| `--check-proton` | Verify Proton works without starting the game |
+
+The launcher needs to be told where Silksong is installed, the same way the mod project is told
+through `<GameDir>` in `SilksongRL.csproj.user`. Copy the example and fill in `game_dir`:
+
+```bash
+cp server_config.json.example server_config.json
+```
+
+```json
+{
+    "game_dir": "/home/you/.steam/steam/steamapps/common/Hollow Knight Silksong",
+
+    "transport": "socket_sync",
+    "host": "localhost",
+    "port": 8000
+}
+```
+
+`server_config.json` is gitignored, so your paths and ports stay out of commits.
+
+### Launching a Proton install
+
+If your install runs under Proton, the launcher drives Proton itself, using the build that created
+your prefix. Steam does not need to be open. You can check it without starting the game:
+
+```bash
+python launch.py --check-proton
+# [Launcher] Proton chain: OK - Proton 9.0 (Beta) in .../compatdata/1030300
+```
+
+`--launch-mode direct` runs the executable instead, which is the default on Windows. If neither suits
+your setup, `--no-game` runs just the server and you start the game however you like.
+
+Under Proton the game's save data lives *inside the Wine prefix*, so both your save file and
+DebugMod's savestates do too. `--compat-data-path` selects a different prefix, which is what will keep
+parallel instances from trampling each other's saves.
+
+If you would rather start the game yourself, use `--no-game` and the launcher behaves as it used to -
+just the server, waiting for the mod to connect.
+
+Closing the game shuts the launcher down. Ctrl-C stops the server and leaves the game running, since
+killing it mid-episode while the save file is being written is not worth the risk.
 
 ## START THE GAME
 
@@ -79,10 +159,15 @@ Unpause and press P! You should see your agent start to move on it's own. It's t
 
 ## CHANGING ENCOUNTERS
 
-If you wish to try out another boss, head to your game installation, get inside `BepInEx/config`, open the silksongrl.cfg file
-and set TargetBoss to the one you want.
+Pass a different `--boss` to the launcher:
 
-<img width="1906" height="889" alt="image" src="https://github.com/user-attachments/assets/a458dafc-31d3-4614-8197-fab1c29a3c28" />
+```bash
+python launch.py --boss Savage_Beastfly
+```
+
+That writes `TargetBoss` into `BepInEx/config/silksongrl.cfg` for you. You can still edit that file
+by hand if you prefer - the launcher only touches the settings you pass it on the command line, and
+leaves the rest of the file, comments included, alone.
 
 
 ### NOTES:

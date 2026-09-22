@@ -36,7 +36,11 @@ class AsyncRLSocketServer:
         self.host = host
         self.port = port
 
-    async def start(self):
+    async def start(self, ready_event=None):
+        """
+        Serve forever. If ready_event is given it is set once we are listening, so a caller can
+        wait before starting the game - the mod only retries its connection a handful of times.
+        """
         server = await asyncio.start_server(
             self.handle_client,
             self.host,
@@ -44,6 +48,9 @@ class AsyncRLSocketServer:
         )
         
         print(f"[AsyncSocketServer] Listening on {self.host}:{self.port}")
+        
+        if ready_event is not None:
+            ready_event.set()
         
         async with server:
             await server.serve_forever()

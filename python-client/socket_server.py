@@ -31,12 +31,19 @@ class RLSocketServer:
         self.socket: Optional[socket.socket] = None
         self.conn: Optional[socket.socket] = None
 
-    def start(self):
+    def start(self, ready_event=None):
+        """
+        Serve forever. If ready_event is given it is set once we are listening, so a caller can
+        wait before starting the game - the mod only retries its connection a handful of times.
+        """
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((self.host, self.port))
         self.socket.listen(1)
         print(f"[SocketServer] Listening on {self.host}:{self.port}")
+
+        if ready_event is not None:
+            ready_event.set()
         
         while True:
             print("[SocketServer] Waiting for connection...")

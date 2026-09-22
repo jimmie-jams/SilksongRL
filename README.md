@@ -110,10 +110,21 @@ The Unity mod communicates with the Python socket server:
    pip install -r requirements.txt
    ```
 
-4. **Run the socket server:**
+4. **Create your config:**
    ```bash
-   python launch.py
+   cp server_config.json.example server_config.json
    ```
+   and set `game_dir` to your Silksong install directory. `server_config.json` is gitignored, like
+   `SilksongRL.csproj.user` on the mod side.
+
+5. **Start the server and the game:**
+   ```bash
+   python launch.py --boss Lace_1
+   ```
+   The launcher points the mod at the encounter you asked for, starts the training server and
+   launches the game in the right order. `python launch.py --dry-run` reports
+   what it found without starting anything, and `--no-game` runs just the server if you would rather
+   start the game yourself.
 
 ## Running the System
 
