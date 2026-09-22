@@ -216,19 +216,46 @@ class GameProcess:
             pass
 
 
+def ensure_steam_appid_file(install: GameInstall) -> bool:
+    """
+    Write steam_appid.txt next to the exe if it is missing.
+
+    Started outside Steam, the game asks Steam to relaunch it and exits immediately. This file is
+    what tells Steamworks to skip that check and run in place. Returns True if we created it.
+    """
+    marker = install.game_dir / "steam_appid.txt"
+    if marker.is_file():
+        return False
+    try:
+        marker.write_text(STEAM_APP_ID + "\n", encoding="ascii")
+    except OSError as e:
+        print(f"[Game] Could not write {marker}: {e}. "
+              "The game may bounce through Steam and exit immediately.")
+        return False
+    print(f"[Game] Created {marker} so the game does not relaunch itself through Steam. "
+          "Delete it to restore the default behaviour.")
+    return True
+
+
 def _launch_direct(install: GameInstall, game_args: List[str]) -> GameProcess:
-    """
-    Run the exe. Windows only, where BepInEx's doorstop is picked up without help from us.
-    """
+    """Run the exe. Windows only, where BepInEx's doorstop is picked up without help from us."""
     if not (IS_WINDOWS and install.is_windows_build):
         raise GameNotFound(
             f"Cannot launch {install.game_dir} directly on {platform.system()}. "
             "On Linux use --launch-mode proton, or --no-game."
         )
 
+    ensure_steam_appid_file(install)
+
+    env = os.environ.copy()
+    # Same reason as steam_appid.txt: tell Steamworks which app this is so it does not try to
+    # relaunch us through Steam.
+    env.setdefault("SteamAppId", STEAM_APP_ID)
+    env.setdefault("SteamGameId", STEAM_APP_ID)
+
     cmd = [str(install.windows_exe)] + game_args
     print(f"[Game] Launching: {' '.join(cmd)}")
-    process = subprocess.Popen(cmd, cwd=str(install.game_dir))
+    process = subprocess.Popen(cmd, cwd=str(install.game_dir), env=env)
     return GameProcess(install, process)
 
 
@@ -288,6 +315,8 @@ def _launch_via_proton(install: GameInstall, game_args: List[str],
     env.setdefault("SteamGameId", STEAM_APP_ID)
     env["STEAM_COMPAT_APP_ID"] = STEAM_APP_ID
     _add_doorstop_dll_override(env)
+
+    ensure_steam_appid_file(install)
 
     print(f"[Game] Proton:  {proton_dir.name}")
     print(f"[Game] Prefix:  {prefix}")

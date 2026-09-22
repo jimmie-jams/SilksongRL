@@ -127,7 +127,9 @@ def wait_for_mod(install, process, timeout: float = 90.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not process.is_running:
-            print("[Launcher] Game exited before the mod loaded.")
+            print("[Launcher] Game exited before the mod loaded. If it reappears a moment later, "
+                  "it relaunched itself through Steam - check that steam_appid.txt exists in the "
+                  "game folder.")
             return False
         if log.is_file() and log.stat().st_mtime > before:
             print("[Launcher] BepInEx is writing its log; the mod is loading.")
@@ -271,9 +273,13 @@ def main():
                                      compat_data_path=args.compat_data_path,
                                      proton=args.proton)
         wait_for_mod(install, process)
-        print("[Launcher] Waiting for the game to exit (Ctrl-C to stop the server).")
-        process.wait()
-        print("[Launcher] Game exited, shutting down.")
+        if not process.is_running:
+            # Already gone - do not claim to be waiting for it.
+            print("[Launcher] Shutting down.")
+        else:
+            print("[Launcher] Waiting for the game to exit (Ctrl-C to stop the server).")
+            process.wait()
+            print("[Launcher] Game exited, shutting down.")
     except game_module.GameNotFound as e:
         print(f"[Launcher] {e}")
         sys.exit(1)
