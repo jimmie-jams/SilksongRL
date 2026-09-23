@@ -28,25 +28,9 @@ namespace SilksongRL
     ///     internal SaveStateData()                        -- parameterless, non-public
     ///     public void AfterDeserialize()                  -- rebuilds customData from customDataList
     ///     public string saveStateIdentifier
+    ///     public PlayerData savedPd / public SceneData savedSd -- the world state, used by AutoStart
     ///
-    /// WE DELIBERATELY DO NOT TOUCH DEBUGMOD'S SAVESTATE STORE.
-    /// No calls to GetQuickState/SetQuickState/GetFileState/SetFileState/ImportPack, and we never
-    /// write DebugMod.stateOnDeath. SilksongRL keeps its own savestates as JSON under savestates/
-    /// next to this plugin and only borrows DebugMod's loader, so the player's own savestates,
-    /// quickslot, pages and settings are left exactly as they found them and both mods can be
-    /// active at once. Storage is ours; loading is theirs.
-    ///
-    /// WHY REFLECTION INSTEAD OF AN ASSEMBLY REFERENCE
-    /// ----------------------------------------------
-    /// 1. DebugMod targets netstandard2.1; this project targets .NET Framework 4.7.2.
-    /// 2. DebugMod.dll lands in different folders depending on how it was installed
-    ///    (Thunderstore uses BepInEx/plugins/hk_speedrunning-DebugMod/, a manual install
-    ///    uses BepInEx/plugins/DebugMod/), so a csproj HintPath would break other people's builds.
-    /// 3. If DebugMod changes its internals, we log a clear error once and training refuses to
-    ///    start, rather than the whole plugin failing to load.
-    ///
-    /// This mirrors the pattern DebugMod itself uses for its optional dependencies
-    /// (see Interop/I18NInterop.cs and Helpers/InteropHelper.cs in that repository).
+
     /// </summary>
     internal static class DebugModSaveStates
     {
@@ -62,6 +46,8 @@ namespace SilksongRL
         private static MethodInfo afterDeserializeMethod;
         private static FieldInfo dataField;
         private static FieldInfo identifierField;
+        private static FieldInfo savedPdField;
+        private static FieldInfo savedSdField;
 
         /// <summary>True when DebugMod is present and every member we need was resolved.</summary>
         public static bool IsAvailable { get; private set; }
@@ -112,6 +98,10 @@ namespace SilksongRL
                     afterDeserializeMethod = saveStateDataType.GetMethod("AfterDeserialize",
                         BindingFlags.Public | BindingFlags.Instance);
                     identifierField = saveStateDataType.GetField("saveStateIdentifier",
+                        BindingFlags.Public | BindingFlags.Instance);
+                    savedPdField = saveStateDataType.GetField("savedPd",
+                        BindingFlags.Public | BindingFlags.Instance);
+                    savedSdField = saveStateDataType.GetField("savedSd",
                         BindingFlags.Public | BindingFlags.Instance);
                 }
 
@@ -234,6 +224,40 @@ namespace SilksongRL
             catch (Exception e)
             {
                 Fail($"error loading savestate: {e.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Copies of the PlayerData and SceneData inside a built state.
+        ///
+        /// Copies because the game takes ownership of whatever it is given (GameManager.SetLoadedGameData
+        /// makes it PlayerData.instance) and mutates it during play. Handing over the savestate's own
+        /// objects would corrupt the state every later reset restores from. The JSON round trip is the
+        /// same way DebugMod copies them.
+        /// </summary>
+        public static bool TryGetWorldData(object state, out PlayerData playerData, out SceneData sceneData)
+        {
+            playerData = null;
+            sceneData = null;
+            if (!IsAvailable || state == null || savedPdField == null || savedSdField == null)
+                return false;
+
+            try
+            {
+                object data = dataField.GetValue(state);
+                PlayerData pd = data == null ? null : savedPdField.GetValue(data) as PlayerData;
+                SceneData sd = data == null ? null : savedSdField.GetValue(data) as SceneData;
+                if (pd == null || sd == null)
+                    return false;
+
+                playerData = JsonUtility.FromJson<PlayerData>(JsonUtility.ToJson(pd));
+                sceneData = JsonUtility.FromJson<SceneData>(JsonUtility.ToJson(sd));
+                return true;
+            }
+            catch (Exception e)
+            {
+                RLManager.StaticLogger?.LogError($"[SaveStates] Could not copy the savestate's world data: {e.Message}");
                 return false;
             }
         }

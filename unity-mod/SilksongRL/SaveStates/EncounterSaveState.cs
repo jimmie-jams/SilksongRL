@@ -118,7 +118,29 @@ namespace SilksongRL
         /// </summary>
         public bool TryLoad()
         {
-            return IsReady && DebugModSaveStates.TryLoad(state);
+            if (!IsReady || !DebugModSaveStates.TryLoad(state))
+                return false;
+
+            // Every savestate load goes through here, so this is where the session stops being safe
+            // to save.
+            SaveSuppression.Activate("a savestate was loaded");
+            return true;
+        }
+
+        /// <summary>
+        /// The savestate's world as a SaveGameData the game can boot from directly, with no save
+        /// file involved. Used by AutoStart.
+        /// </summary>
+        public bool TryCreateSaveGameData(out SaveGameData saveGameData)
+        {
+            saveGameData = null;
+            PlayerData playerData;
+            SceneData sceneData;
+            if (!IsReady || !DebugModSaveStates.TryGetWorldData(state, out playerData, out sceneData))
+                return false;
+
+            saveGameData = new SaveGameData(playerData, sceneData);
+            return true;
         }
     }
 }

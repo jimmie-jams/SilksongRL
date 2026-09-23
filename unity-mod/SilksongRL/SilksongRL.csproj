@@ -81,6 +81,9 @@
     <Reference Include="UnityEngine">
       <HintPath>$(GameDir)\Hollow Knight Silksong_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(GameDir)\Hollow Knight Silksong_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(GameDir)\Hollow Knight Silksong_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
@@ -120,9 +123,12 @@
     <Compile Include="Encounters\SavageBeastflyEncounter.cs" />
     <Compile Include="Vision\ResolutionDiagnostics.cs" />
     <Compile Include="RLManager.cs" />
+    <Compile Include="SaveStates\AutoStart.cs" />
     <Compile Include="SaveStates\DebugModSaveStates.cs" />
     <Compile Include="SaveStates\EncounterSaveState.cs" />
+    <Compile Include="SaveStates\GameReadiness.cs" />
     <Compile Include="SaveStates\LethalDamagePatch.cs" />
+    <Compile Include="SaveStates\SaveSuppression.cs" />
     <Compile Include="Vision\ScreenCapture.cs" />
     <Compile Include="Vision\ScreenCaptureOld.cs" />
     <Compile Include="Vision\ScreenCaptureTest.cs" />

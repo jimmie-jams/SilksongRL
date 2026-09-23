@@ -23,6 +23,7 @@ namespace SilksongRL
         private ConfigEntry<float> configStepInterval;
         private ConfigEntry<bool> configEvalMode;
         private ConfigEntry<string> configSavestateFile;
+        private ConfigEntry<bool> configAutoStart;
 
         public static bool isAgentControlEnabled = false;
 
@@ -65,6 +66,15 @@ namespace SilksongRL
 
         private float lastStepTime = 0f;
 
+        // P, or AutoStart, arms the run; agent control switches on once the game has been ready for
+        // ReadySeconds. Enabling it any earlier - during the intro, say - makes the first reset load a
+        // savestate before the HUD exists, which DebugMod cannot survive.
+        private const float ReadySeconds = 0.5f;
+        private const float WaitingLogIntervalSeconds = 10f;
+        private bool isArmed = false;
+        private float readySince = -1f;
+        private float lastWaitingLogTime = 0f;
+
         private void Awake()
         {
             StaticLogger = Logger;
@@ -85,6 +95,10 @@ namespace SilksongRL
             configSavestateFile = Config.Bind("Training", "SavestateFile", "",
                 "Savestate to reset to. Either a file name inside the \"savestates\" folder next to " +
                 "SilksongRL.dll, or an absolute path. Empty uses the file the selected encounter asks for.");
+            configAutoStart = Config.Bind("Training", "AutoStart", false,
+                "If true, skip the intro and title screen and start training straight away, booting from " +
+                "the encounter's savestate. No save file is read or written.");
+            AutoStart.Enabled = configAutoStart.Value;
             
             stepInterval = configStepInterval.Value;
             isInEval = configEvalMode.Value;
@@ -143,6 +157,14 @@ namespace SilksongRL
             StaticLogger.LogInfo($"[RL] Mode: {(isInEval ? "Evaluation" : "Training")}");
             
             _ = InitializeClientAsync();
+
+            if (AutoStart.Enabled)
+            {
+                if (saveStateResetsActive)
+                    StartCoroutine(AutoStart.ContinueFromSavestate(encounterSaveState, () => Arm("autostart")));
+                else
+                    StaticLogger.LogError("[AutoStart] Not starting automatically: there is no savestate to start from.");
+            }
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
         }
@@ -246,19 +268,14 @@ namespace SilksongRL
             // Toggle control when pressing P
             if (Input.GetKeyDown(KeyCode.P))
             {
-                // Turning the agent loose without a way to reset would run one episode and then
-                // wedge, so refuse rather than half-work.
-                if (!isAgentControlEnabled && !saveStateResetsActive)
-                {
-                    StaticLogger.LogError(
-                        "[RL] Cannot enable agent control: no savestate to reset to, so episodes could never reset.");
-                    return;
-                }
-
-                isAgentControlEnabled = !isAgentControlEnabled;
-                
-                StaticLogger.LogInfo($"[RL] Agent control {(isAgentControlEnabled ? "enabled" : "disabled")}. Hero: {(Hero != null ? "Found" : "Not found")}, Boss: {(Boss != null ? "Found" : "Not found")}");
+                if (isAgentControlEnabled || isArmed)
+                    Disarm("P pressed");
+                else
+                    Arm("P pressed");
             }
+
+            if (isArmed)
+                UpdateArming();
             
             // Log resolution diagnostics when pressing L
             if (Input.GetKeyDown(KeyCode.L))
@@ -425,11 +442,80 @@ namespace SilksongRL
 
 
         /// <summary>
+        /// Arm a run: agent control switches on once the game is ready (see UpdateArming).
+        /// </summary>
+        private void Arm(string why)
+        {
+            if (episodeManager == null)
+            {
+                StaticLogger.LogWarning("[RL] Cannot start yet: still loading. Try again from the title screen.");
+                return;
+            }
+            // Turning the agent loose without a way to reset would run one episode and then wedge.
+            if (!saveStateResetsActive)
+            {
+                StaticLogger.LogError("[RL] Cannot start: no savestate to reset to, so episodes could never reset.");
+                return;
+            }
+
+            // A fresh run: nothing from a previous one should leak into the first transition.
+            episodeManager.PrepareForRun();
+            previousObservations = null;
+            previousAction = null;
+            hasPreviousStep = false;
+            pendingDoneTransition = false;
+            whoDied = -1;
+
+            isArmed = true;
+            readySince = -1f;
+            lastWaitingLogTime = Time.unscaledTime;
+            StaticLogger.LogInfo($"[RL] Armed ({why}). Agent control starts once the game is ready.");
+        }
+
+        private void Disarm(string why)
+        {
+            bool wasRunning = isAgentControlEnabled || isArmed;
+            isArmed = false;
+            isAgentControlEnabled = false;
+            currentAction = new Action();
+            isProcessingStep = false;
+            if (wasRunning)
+                StaticLogger.LogInfo($"[RL] Agent control disabled ({why}).");
+        }
+
+        private void UpdateArming()
+        {
+            string notReady = GameReadiness.NotReadyReason();
+            if (notReady != null)
+            {
+                readySince = -1f;
+                if (Time.unscaledTime - lastWaitingLogTime >= WaitingLogIntervalSeconds)
+                {
+                    lastWaitingLogTime = Time.unscaledTime;
+                    StaticLogger.LogInfo($"[RL] Waiting to start: {notReady}.");
+                }
+                return;
+            }
+
+            if (readySince < 0f)
+                readySince = Time.unscaledTime;
+            if (Time.unscaledTime - readySince < ReadySeconds)
+                return;
+
+            isArmed = false;
+            isAgentControlEnabled = true;
+            StaticLogger.LogInfo(Boss == null
+                ? "[RL] Agent control enabled. Not in the arena yet, so the first reset loads the encounter."
+                : "[RL] Agent control enabled.");
+        }
+
+        /// <summary>
         /// A reset we cannot perform means every following episode would fail the same way, so stop
         /// rather than retrying forever. Press P again once the situation is fixed.
         /// </summary>
         private void StopOnResetFailure()
         {
+            isArmed = false;
             isAgentControlEnabled = false;
             currentAction = new Action();
             isProcessingStep = false;

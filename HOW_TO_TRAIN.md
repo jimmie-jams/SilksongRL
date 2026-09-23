@@ -62,6 +62,7 @@ cp server_config.json.example server_config.json
 ```json
 {
     "game_dir": "/home/you/.steam/steam/steamapps/common/Hollow Knight Silksong",
+    "autostart": true,
 
     "transport": "socket_sync",
     "host": "localhost",
@@ -105,13 +106,15 @@ The default starting encounter is Lace 1.
 <br>
 <br>
 
-> **Train on a save file you do not care about.** Every episode reset loads a savestate, and loading
-> a savestate overwrites the active save file with no undo - this is how DebugMod savestates work and
-> has nothing to do with SilksongRL specifically. Over a training run this happens thousands of times.
-> Make a throwaway save file for training and keep your real one well away from it.
+With `autostart` on (the default), the game skips the intro and title screen and boots straight from
+the encounter's savestate - you never open a save file. Training starts on its own.
 
-Once you open a savefile, the DebugMod overlay should appear, which looks like this (if it isn't on by default press F2 to activate).
-You do not need to set your masks or equipment up - the savestate the agent resets to already has ten masks and the right loadout baked in.
+Your save files are safe either way. Once SilksongRL has loaded a savestate, the game's in-memory state
+is training state, so the mod stops the game saving until it closes rather than let an autosave write
+that over a real save slot.
+
+The DebugMod overlay looks like this (press F2 to toggle it). You do not need to set up masks or
+equipment - the savestate already has ten masks and the right loadout.
 
 <br>
 
@@ -152,9 +155,15 @@ use a savestate from somewhere else, point `SavestateFile` in `BepInEx/config/si
 
 ## AND... TRAIN!
 
-Press F2 to close the DebugMod UI (this is not important for Lace 1, but other encounters, such as Lace 2 use visual state information, so the the UI will mess with their performance)
+With `autostart` on there is nothing to press - the agent starts moving on its own. It's training now!
+Wish it luck, because it's certainly going to need it.
 
-Unpause and press P! You should see your agent start to move on it's own. It's training now! Wish it luck, because it's certainly going to need it.
+Press F2 to close the DebugMod UI. This matters for encounters with visual observations, such as
+Lace 2, where the UI would end up in what the agent sees.
+
+With `"autostart": false`, load any save and press P. P arms the run: agent control starts once the
+game is ready, so pressing it on a loading screen or during a cutscene is fine - it waits. Press P again
+to stop.
 
 
 ## CHANGING ENCOUNTERS

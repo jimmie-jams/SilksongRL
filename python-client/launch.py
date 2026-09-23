@@ -26,6 +26,7 @@ DEFAULT_CONFIG = {
     "host": "localhost",
     "port": 8000,
     "game_dir": None,            # required; set in server_config.json
+    "autostart": True,           # skip the menus and start training straight from the savestate
 }
 
 
@@ -65,9 +66,10 @@ def build_server(transport: str, host: str, port: int):
     sys.exit(1)
 
 
-def apply_mod_config(install, boss, port, eval_mode, step_interval):
+def apply_mod_config(install, boss, port, eval_mode, step_interval, autostart):
     """Push launcher options into the mod's config."""
-    values = {}
+    # Always written, so server_config.json decides rather than whatever the mod's config last held.
+    values = {("Training", "AutoStart"): "true" if autostart else "false"}
     if boss is not None:
         values[("Training", "TargetBoss")] = boss
     if port is not None:
@@ -89,7 +91,7 @@ def apply_mod_config(install, boss, port, eval_mode, step_interval):
     return True
 
 
-def report(install, transport, host, port):
+def report(install, transport, host, port, autostart):
     print(f"[Launcher] Game:      {install.describe()}")
     print(f"[Launcher] BepInEx:   {'found' if install.has_bepinex else 'NOT FOUND'}")
     plugin = install.installed_plugin
@@ -101,10 +103,12 @@ def report(install, transport, host, port):
     boss = ModConfig(install.plugin_config).read("Training", "TargetBoss")
     print(f"[Launcher] Encounter: {boss if boss else 'not set (mod will use its default)'}")
     print(f"[Launcher] Transport: {transport} on {host}:{port}")
+    print(f"[Launcher] Autostart: {'on' if autostart else 'off (load a save and press P)'}")
 
 
-def warn_about_setup(install):
-    if game_module.steam_is_running() is False:
+def warn_about_setup(install, autostart):
+    # Autostart never reads or writes a save file, so only manual runs care where saves are.
+    if not autostart and game_module.steam_is_running() is False:
         print("[Launcher] WARNING: Steam does not appear to be running. Silksong finds your saves "
               "through your Steam account id, so without a Steam session it will not show them and "
               "may create a new save file instead. Start Steam first if you want your usual saves.")
@@ -188,6 +192,7 @@ def main():
     transport = (args.transport or cfg.get("transport", "socket_sync")).lower()
     host = args.host or cfg.get("host", "localhost")
     port = args.port if args.port is not None else int(cfg.get("port", 8000))
+    autostart = bool(cfg.get("autostart", True))
 
     boss = normalize_encounter(args.boss) if args.boss else None
 
@@ -205,7 +210,7 @@ def main():
                 sys.exit(1)
 
     if install is not None:
-        report(install, transport, host, port)
+        report(install, transport, host, port, autostart)
 
     if args.check_proton:
         if install is None:
@@ -218,6 +223,10 @@ def main():
         sys.exit(0 if ok else 1)
 
     if args.dry_run:
+        current_autostart = None
+        if install is not None:
+            current = ModConfig(install.plugin_config).read("Training", "AutoStart")
+            current_autostart = None if current is None else current.strip().lower() == "true"
         if install is not None:
             try:
                 mode = (args.launch_mode if args.launch_mode != "auto"
@@ -238,13 +247,14 @@ def main():
                     f"Port={port}" if args.port is not None else None,
                     f"EvalMode={args.eval_mode}" if args.eval_mode is not None else None,
                     f"StepInterval={args.step_interval}" if args.step_interval is not None else None,
+                    f"AutoStart={autostart}" if current_autostart != autostart else None,
                 ])) or "nothing"))
         return
 
     if install is not None:
         apply_mod_config(install, boss, port if args.port is not None else None,
-                         args.eval_mode, args.step_interval)
-        warn_about_setup(install)
+                         args.eval_mode, args.step_interval, autostart)
+        warn_about_setup(install, autostart)
     elif boss is not None:
         print("[Launcher] WARNING: could not find the game, so --boss was not applied. "
               "Set TargetBoss in silksongrl.cfg yourself.")

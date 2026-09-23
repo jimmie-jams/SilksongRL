@@ -154,6 +154,20 @@ namespace SilksongRL
         }
 
         /// <summary>
+        /// Start a run from a clean slate, whatever state the last one ended in - including Failed,
+        /// which otherwise never clears.
+        /// </summary>
+        public void PrepareForRun()
+        {
+            CurrentState = EpisodeState.Training;
+            hasTriggeredReset = false;
+            resetLoadRequested = false;
+            loadAttempts = 0;
+            LethalDamagePatch.LethalDamageBlocked = false;
+            consecutiveStuckSteps = 0;
+        }
+
+        /// <summary>
         /// Resets the episode manager state after a successful reset.
         /// </summary>
         public void ResetEpisode()
@@ -172,7 +186,7 @@ namespace SilksongRL
 
         /// <summary>
         /// Asks DebugMod to load the encounter's savestate. DebugMod refuses while the hero is
-        /// transitioning or while another load is running, so we retry every tick until it takes.
+        /// transitioning or another load is running, so this retries - spaced out, and not forever.
         /// </summary>
         private bool RequestSaveStateLoad(HeroController hero, string reason)
         {
