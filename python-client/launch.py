@@ -104,6 +104,10 @@ def report(install, transport, host, port):
 
 
 def warn_about_setup(install):
+    if game_module.steam_is_running() is False:
+        print("[Launcher] WARNING: Steam does not appear to be running. Silksong finds your saves "
+              "through your Steam account id, so without a Steam session it will not show them and "
+              "may create a new save file instead. Start Steam first if you want your usual saves.")
     if not install.has_bepinex:
         print("[Launcher] WARNING: no BepInEx/core in the game directory - the mod will not load.")
     plugin = install.installed_plugin

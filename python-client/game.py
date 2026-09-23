@@ -216,6 +216,25 @@ class GameProcess:
             pass
 
 
+def steam_is_running() -> Optional[bool]:
+    """
+    Is a Steam client running? None if we could not tell.
+
+    Matters because Silksong stores saves under a folder named after your Steam account id, which it
+    can only learn from a running Steam client. Started with no Steam session, the game does not find
+    your existing saves.
+    """
+    try:
+        if IS_WINDOWS:
+            out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"],
+                                 capture_output=True, timeout=30).stdout.decode("utf-8", "replace")
+            return "steam.exe" in out.lower()
+        result = subprocess.run(["pgrep", "-x", "steam"], capture_output=True, timeout=30)
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def ensure_steam_appid_file(install: GameInstall) -> bool:
     """
     Write steam_appid.txt next to the exe if it is missing.

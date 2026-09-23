@@ -18,7 +18,8 @@ namespace SilksongRL
             HeroDead,        // Hero died, need to reset
             BossDead,        // Boss died, need to reset
             HeroStuck,       // Hero stuck (e.g., below ground), need to force reset
-            Resetting        // Savestate load requested, waiting for the arena to come back
+            Resetting,       // Savestate load requested, waiting for the arena to come back
+            Failed           // Reset could not be performed; training stops
         }
 
         public EpisodeState CurrentState { get; private set; }
@@ -37,10 +38,19 @@ namespace SilksongRL
         private float loadWaitStartTime = 0f;
         private bool resetLoadRequested = false;
 
+        // DebugMod logs a full stack trace when a load fails, and a failed load clears
+        // loadingSavestate immediately, so retrying every tick turns one failure into hundreds of
+        // log lines. Space the attempts out and give up after a few.
+        private const float LOAD_RETRY_INTERVAL_SECONDS = 1f;
+        private const int MAX_LOAD_ATTEMPTS = 5;
+        private int loadAttempts = 0;
+        private float lastLoadAttemptTime = 0f;
+
         private bool hasTriggeredReset = false;
         private float resetSequenceStartTime = 0f;
 
         public System.Action OnResetComplete;
+        public System.Action OnResetFailed;
 
         public TrainingEpisodeManager(IBossEncounter encounter, EncounterSaveState saveState)
         {
@@ -135,6 +145,9 @@ namespace SilksongRL
                 case EpisodeState.Resetting:
                     return WaitForSaveStateLoad(hero, boss);
 
+                case EpisodeState.Failed:
+                    return true;
+
                 default:
                     return false;
             }
@@ -148,6 +161,7 @@ namespace SilksongRL
             CurrentState = EpisodeState.Training;
             hasTriggeredReset = false;
             resetLoadRequested = false;
+            loadAttempts = 0;
             LethalDamagePatch.LethalDamageBlocked = false;
             consecutiveStuckSteps = 0;
 
@@ -166,8 +180,16 @@ namespace SilksongRL
             {
                 hasTriggeredReset = true;
                 resetSequenceStartTime = Time.unscaledTime;
+                loadAttempts = 0;
+                lastLoadAttemptTime = float.NegativeInfinity;
                 RLManager.StaticLogger?.LogInfo($"[TrainingEpisodeManager] {reason} - loading savestate...");
             }
+
+            if (Time.unscaledTime - lastLoadAttemptTime < LOAD_RETRY_INTERVAL_SECONDS)
+                return true; // waiting out the gap between attempts
+
+            lastLoadAttemptTime = Time.unscaledTime;
+            loadAttempts++;
 
             if (saveState.TryLoad())
             {
@@ -175,16 +197,32 @@ namespace SilksongRL
                 return true;
             }
 
-            // Refused this frame (usually mid-transition). Keep trying, but do not hang forever.
-            if (Time.unscaledTime - resetSequenceStartTime >= LOAD_TIMEOUT_SECONDS)
+            // The load was refused (hero transitioning) or it started and threw straight away.
+            // Either way DebugMod has already said why, so do not keep hammering it.
+            if (loadAttempts >= MAX_LOAD_ATTEMPTS ||
+                Time.unscaledTime - resetSequenceStartTime >= LOAD_TIMEOUT_SECONDS)
             {
-                RLManager.StaticLogger?.LogError(
-                    $"[TrainingEpisodeManager] DebugMod would not load a savestate within {LOAD_TIMEOUT_SECONDS}s - giving up and resuming");
-                ResetEpisode();
+                FailReset(
+                    $"savestate would not load after {loadAttempts} attempt(s). If DebugMod logged an " +
+                    "error above, the savestate cannot be loaded from where the hero currently is - " +
+                    "get into the arena before enabling agent control.");
                 return false;
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Stop trying to reset. Resuming would just re-detect the same condition and loop, so the
+        /// episode manager parks in Failed and lets RLManager turn agent control off.
+        /// </summary>
+        private void FailReset(string message)
+        {
+            CurrentState = EpisodeState.Failed;
+            hasTriggeredReset = false;
+            resetLoadRequested = false;
+            RLManager.StaticLogger?.LogError($"[TrainingEpisodeManager] Reset failed: {message}");
+            OnResetFailed?.Invoke();
         }
 
         private void BeginWaitingForLoad()
@@ -207,9 +245,7 @@ namespace SilksongRL
             {
                 if (timedOut)
                 {
-                    RLManager.StaticLogger?.LogError(
-                        $"[TrainingEpisodeManager] Savestate load did not finish within {LOAD_TIMEOUT_SECONDS}s - resuming anyway");
-                    ResetEpisode();
+                    FailReset($"savestate load did not finish within {LOAD_TIMEOUT_SECONDS}s");
                     return false;
                 }
                 return true;
@@ -221,9 +257,9 @@ namespace SilksongRL
             {
                 if (timedOut)
                 {
-                    RLManager.StaticLogger?.LogError(
-                        $"[TrainingEpisodeManager] Boss did not respawn within {LOAD_TIMEOUT_SECONDS}s of the savestate load - resuming anyway");
-                    ResetEpisode();
+                    FailReset(
+                        $"the boss did not appear within {LOAD_TIMEOUT_SECONDS}s of the savestate load. " +
+                        "Does this savestate drop the hero into the encounter?");
                     return false;
                 }
                 return true;

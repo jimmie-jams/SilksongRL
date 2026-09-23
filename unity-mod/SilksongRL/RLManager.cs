@@ -135,6 +135,7 @@ namespace SilksongRL
 
             episodeManager = new TrainingEpisodeManager(currentEncounter, encounterSaveState);
             episodeManager.OnResetComplete = ResetRL;
+            episodeManager.OnResetFailed = StopOnResetFailure;
 
             StaticLogger.LogInfo($"[RL] Initialized with encounter: {currentEncounter.GetEncounterName()}");
             StaticLogger.LogInfo($"[RL] Observation size: {currentEncounter.GetObservationSize()}");
@@ -422,6 +423,18 @@ namespace SilksongRL
             }
         }
 
+
+        /// <summary>
+        /// A reset we cannot perform means every following episode would fail the same way, so stop
+        /// rather than retrying forever. Press P again once the situation is fixed.
+        /// </summary>
+        private void StopOnResetFailure()
+        {
+            isAgentControlEnabled = false;
+            currentAction = new Action();
+            isProcessingStep = false;
+            StaticLogger.LogError("[RL] Agent control disabled because the episode could not be reset.");
+        }
 
         private void ResetRL()
         {
