@@ -95,6 +95,10 @@ namespace SilksongRL
             gameCamera.AddCommandBuffer(CameraEvent.AfterEverything, captureCommand);
         }
 
+        public int Width => targetWidth;
+        public int Height => targetHeight;
+        public (int top, int bottom, int left, int right) CropMargins => (cropTop, cropBottom, cropLeft, cropRight);
+
         /// <summary>
         /// Update crop margins at runtime. Takes effect on next capture.
         /// </summary>

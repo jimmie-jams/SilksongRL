@@ -19,7 +19,7 @@ namespace SilksongRL
     ///   Shift + Arrow: Adjust by 50px
     ///   Tab: Cycle through margins (Top → Bottom → Left → Right)
     /// 
-    /// Add to RLManager with: gameObject.AddComponent&lt;ScreenCaptureTest&gt;();
+    /// RLManager toggles it with L.
     /// </summary>
     public class ScreenCaptureTest : MonoBehaviour
     {
@@ -29,10 +29,11 @@ namespace SilksongRL
         private bool cropAdjustMode = false;
         private string lastSavePath = "";
         private int captureCount = 0;
-        
-        private const int CAPTURE_WIDTH = 84;
-        private const int CAPTURE_HEIGHT = 84;
-        
+
+        // Used when the encounter has no visual observation to copy
+        private int captureWidth = 84;
+        private int captureHeight = 84;
+
         private int cropTop = 0;
         private int cropBottom = 0;
         private int cropLeft = 0;
@@ -48,16 +49,28 @@ namespace SilksongRL
         private GUIStyle normalStyle;
         private GUIStyle selectedStyle;
 
-        private void Awake()
+        /// <summary>
+        /// Copies the size and crop of the encounter's capture, so the preview shows what the agent sees.
+        /// Its own capture though, so adjusting the crop here never touches training.
+        /// </summary>
+        public void Initialize(ScreenCapture encounterCapture)
         {
-            RLManager.StaticLogger?.LogInfo("ScreenCapture Test loaded. F8=capture, F9=preview, F10=crop adjust");
-            
-            screenCapture = new ScreenCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, cropTop, cropBottom, cropLeft, cropRight);
-            
-            displayTexture = new Texture2D(CAPTURE_WIDTH, CAPTURE_HEIGHT, TextureFormat.RGB24, false);
+            if (encounterCapture != null)
+            {
+                captureWidth = encounterCapture.Width;
+                captureHeight = encounterCapture.Height;
+                (cropTop, cropBottom, cropLeft, cropRight) = encounterCapture.CropMargins;
+            }
+
+            RLManager.StaticLogger?.LogInfo(
+                $"ScreenCapture Test loaded ({captureWidth}x{captureHeight}). F8=capture, F9=preview, F10=crop adjust");
+
+            screenCapture = new ScreenCapture(captureWidth, captureHeight, cropTop, cropBottom, cropLeft, cropRight);
+
+            displayTexture = new Texture2D(captureWidth, captureHeight, TextureFormat.RGB24, false);
             displayTexture.filterMode = FilterMode.Point;
-            
-            previewRect = new Rect(10, 10, CAPTURE_WIDTH * PREVIEW_SCALE, CAPTURE_HEIGHT * PREVIEW_SCALE);
+
+            previewRect = new Rect(10, 10, captureWidth * PREVIEW_SCALE, captureHeight * PREVIEW_SCALE);
         }
 
         private void Start()
@@ -186,7 +199,7 @@ namespace SilksongRL
                 yield break;
             }
             
-            Texture2D saveTexture = new Texture2D(CAPTURE_WIDTH, CAPTURE_HEIGHT, TextureFormat.RGB24, false);
+            Texture2D saveTexture = new Texture2D(captureWidth, captureHeight, TextureFormat.RGB24, false);
             Color[] colors = new Color[greyscaleData.Length];
             
             for (int i = 0; i < greyscaleData.Length; i++)
@@ -213,7 +226,7 @@ namespace SilksongRL
             
             RLManager.StaticLogger?.LogInfo($"Saved greyscale capture to: {savePath}");
             RLManager.StaticLogger?.LogInfo($"Saved color capture to: {colorPath}");
-            RLManager.StaticLogger?.LogInfo($"Cropped region: {croppedW}x{croppedH} -> Output: {CAPTURE_WIDTH}x{CAPTURE_HEIGHT}");
+            RLManager.StaticLogger?.LogInfo($"Cropped region: {croppedW}x{croppedH} -> Output: {captureWidth}x{captureHeight}");
             RLManager.StaticLogger?.LogInfo($"Crop margins: T:{cropTop} B:{cropBottom} L:{cropLeft} R:{cropRight}");
             
             Object.Destroy(saveTexture);
@@ -232,14 +245,14 @@ namespace SilksongRL
             croppedScreen.ReadPixels(new Rect(cropLeft, cropBottom, croppedW, croppedH), 0, 0);
             croppedScreen.Apply();
             
-            RenderTexture rt = new RenderTexture(CAPTURE_WIDTH, CAPTURE_HEIGHT, 0);
+            RenderTexture rt = new RenderTexture(captureWidth, captureHeight, 0);
             rt.filterMode = FilterMode.Bilinear;
             
             Graphics.Blit(croppedScreen, rt);
             
             RenderTexture.active = rt;
-            Texture2D downsized = new Texture2D(CAPTURE_WIDTH, CAPTURE_HEIGHT, TextureFormat.RGB24, false);
-            downsized.ReadPixels(new Rect(0, 0, CAPTURE_WIDTH, CAPTURE_HEIGHT), 0, 0);
+            Texture2D downsized = new Texture2D(captureWidth, captureHeight, TextureFormat.RGB24, false);
+            downsized.ReadPixels(new Rect(0, 0, captureWidth, captureHeight), 0, 0);
             downsized.Apply();
             RenderTexture.active = null;
             
@@ -290,7 +303,7 @@ namespace SilksongRL
                 
                 float infoY = previewRect.y + previewRect.height + 5;
                 GUI.Label(new Rect(previewRect.x, infoY, 300, 20), 
-                    $"Output: {CAPTURE_WIDTH}x{CAPTURE_HEIGHT}", normalStyle);
+                    $"Output: {captureWidth}x{captureHeight}", normalStyle);
                 
                 if (cropAdjustMode)
                 {

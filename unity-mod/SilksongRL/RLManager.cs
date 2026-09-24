@@ -278,12 +278,20 @@ namespace SilksongRL
             if (isArmed)
                 UpdateArming();
             
-            // Log resolution diagnostics when pressing L
+            // Toggle the screen capture test tool (and log resolution diagnostics) when pressing L
             if (Input.GetKeyDown(KeyCode.L))
             {
-                gameObject.AddComponent<ScreenCaptureTest>();
-                ResolutionDiagnostics.LogResolutionInfo(StaticLogger);
-                ResolutionDiagnostics.CheckForPotentialIssues(StaticLogger);
+                var captureTest = GetComponent<ScreenCaptureTest>();
+                if (captureTest != null)
+                {
+                    Destroy(captureTest);
+                }
+                else
+                {
+                    gameObject.AddComponent<ScreenCaptureTest>().Initialize(currentEncounter?.GetScreenCapture());
+                    ResolutionDiagnostics.LogResolutionInfo(StaticLogger);
+                    ResolutionDiagnostics.CheckForPotentialIssues(StaticLogger);
+                }
             }
         }
 
