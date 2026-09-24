@@ -183,7 +183,7 @@ leaves the rest of the file, comments included, alone.
 
 - You can increase the timescale throught Debug mod and the training will function fine as the steps are executed in Unity's FixedUpdate.
 
-- If you want to load saved model weights, put the checkpoint in `python-client/models/<boss>/`, named `<boss>_<attempts>.zip`, where `<boss>` is what you pass to `--boss` (e.g. `models/Lace_1/Lace_1_2400.zip`). If there are several, the one with the most attempts is loaded. Each new save replaces the previous checkpoint, except every 1000 attempts (`Lace_1_1000.zip`, `Lace_1_2000.zip`, ...), which are kept.
+- If you want to load saved model weights, put the checkpoint in `python-client/models/<boss>/`, named `<boss>_<attempts>.zip`, where `<boss>` is what you pass to `--boss` (e.g. `models/Lace_1/Lace_1_2400.zip`). Copy the `.json` of the same name along with it, if there is one: it holds the training stats (attempts, reward history). If there are several checkpoints, the one with the most attempts is loaded. Each new save replaces the previous checkpoint, except every 1000 attempts (`Lace_1_1000.zip`, `Lace_1_2000.zip`, ...), which are kept.
 
 - As this system runs in real time rather than assuming full control of the game, there will be slight deviations in the latency with which things run on different machines. This shouldn't cause too big of an issue. That being said, performance may degrade slightly if we try a model that is used to a certain amount of ms on an environment with less or more.
 

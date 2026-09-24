@@ -139,8 +139,6 @@ Please consult [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)
 
 - **Configurable key bindings**: The agent plays by pressing buttons. Many people do not use the default bindings so if they want to use this they'd have to change them to the default and then back so they can play. Either the key bindings should be manually configurable by the player in silksongrl.cfg or, even better, it should automatically detect the user's keybinds and use those. 
 
-- **Untie reward saving from checkpoints**: The rewards a model gets during training (and episode count, times trained count etc.) are saved within the checkpoint itself. I honestly don't remember *why* I did it like that, maybe I wanted to keep things more compact. At any rate, that seems silly to me right now. A separate json to store and load this info would probably be better (?) and would also mean that the monstrosity that is the load function override can be removed.
-
 - **More bosses**: Adding new bosses is always on the menu. Check out [this PR](https://github.com/jimmie-jams/SilksongRL/pull/2) to get an idea of how it's done. The general idea is you simply need to implement the IBossEncounter interface for another boss.
 
 - **More algorithms**: Not too high priority for now, but trying out more RL algorithms would be cool.

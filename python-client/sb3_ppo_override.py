@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import numpy as np
@@ -5,7 +6,6 @@ import torch
 from stable_baselines3 import PPO
 import matplotlib.pyplot as plt
 from typing import Dict, List, Any, Optional
-from stable_baselines3.common.save_util import load_from_zip_file
 
 
 # Checkpoints at multiples of this many attempts are kept, the rest get replaced by the next save
@@ -36,30 +36,31 @@ def latest_checkpoint(boss_name: str) -> Optional[str]:
     return checkpoints[max(checkpoints)] if checkpoints else None
 
 
+def _stats_path(checkpoint_path: str) -> str:
+    return os.path.splitext(checkpoint_path)[0] + ".json"
+
+
 
 class CustomPPO(PPO):
-    # Need to define times_trained, episodes_completed, episode_rewards, and save_freq here
-    # even though they could just be kept as defaut at 0 because otherwise we cannot load
-    # them into the model after loading from a checkpoint
+    # Training stats, saved next to each checkpoint (Lace_1_350.json) rather than inside it
+    STATS = ("episodes_completed", "times_trained", "episode_rewards")
+
     def __init__(
         self,
         *args: Any,
         boss_name: Optional[str] = None,
         save_freq: int = 50,
-        times_trained: int = 0,
-        episodes_completed: int = 0,
-        episode_rewards: List[float] = [],
         **kwargs: Any
     ) -> None:
         super().__init__(*args, **kwargs)
 
         self.last_done = False
-        self.times_trained = times_trained
         self.boss_name = boss_name
         self.save_freq = save_freq
-        self.episodes_completed = episodes_completed
 
-        self.episode_rewards: List[float] = episode_rewards
+        self.times_trained = 0
+        self.episodes_completed = 0
+        self.episode_rewards: List[float] = []
         self.current_episode_reward = 0.0
 
         # Initilalize logger or SB3 complains
@@ -76,43 +77,21 @@ class CustomPPO(PPO):
     def logger(self):
         return self._logger
 
-    # Override load method to sneak in our own custom variables
-    # Frankly there may be a better way to do this but I'm tired and 
-    # if I keep trying I might claw my eyes out
+    def _excluded_save_params(self) -> List[str]:
+        return super()._excluded_save_params() + list(self.STATS)
+
     @classmethod
-    def load(
-        cls,
-        path: str,
-        device: str | torch.device = "auto",
-        boss_name: Optional[str] = None,
-        **kwargs: Any
-    ) -> "CustomPPO":
-        data, params, pytorch_variables = load_from_zip_file(path, device=device)
+    def load(cls, path: str, **kwargs: Any) -> "CustomPPO":
+        # kwargs (boss_name too) end up as attributes, overriding what the checkpoint stored
+        model = super().load(path, **kwargs)
 
-        # Older checkpoints carry the in-game name (lace_boss1), keep the one we're given
-        data.pop("boss_name", None)
-        save_freq = data.get("save_freq", 50)
-        times_trained = data.get("times_trained", 0)
-        episodes_completed = data.get("episodes_completed", 0)
-        episode_rewards = data.get("episode_rewards", [])
-
-        model = cls(
-            policy=data["policy_class"],
-            env=None,
-            device=device,
-            boss_name=boss_name,
-            save_freq=save_freq,
-            times_trained=times_trained,
-            episodes_completed=episodes_completed,
-            episode_rewards=episode_rewards,
-            _init_setup_model=False
-        )
-
-        model.__dict__.update(data)
-        model.__dict__.update(kwargs)
-
-        model._setup_model()
-        model.set_parameters(params, exact_match=False)
+        # Older checkpoints have no .json, their stats are inside the zip and already restored
+        stats_path = _stats_path(path)
+        if os.path.exists(stats_path):
+            with open(stats_path) as f:
+                model.__dict__.update(json.load(f))
+        elif model.episodes_completed == 0:
+            print(f"[CustomPPO] No {os.path.basename(stats_path)} next to the checkpoint, stats start from 0")
 
         return model
 
@@ -122,19 +101,26 @@ class CustomPPO(PPO):
 
 
     def save_checkpoint(self) -> str:
-        """Save as models/<boss>/<boss>_<attempts>.zip, replacing the previous checkpoint unless it's a keeper."""
+        """
+        Save as models/<boss>/<boss>_<attempts>.zip plus its stats .json,
+        replacing the previous checkpoint unless it's a keeper.
+        """
         previous = _checkpoints(self.boss_name)
 
         boss_dir = _boss_directory(self.boss_name)
         os.makedirs(boss_dir, exist_ok=True)
         path = os.path.join(boss_dir, f"{self.boss_name}_{self.episodes_completed}.zip")
         self.save(path)
+        with open(_stats_path(path), "w") as f:
+            json.dump({name: getattr(self, name) for name in self.STATS}, f)
         # self.plot_rewards(boss_dir)
 
         for attempts, old_path in previous.items():
             keeper = attempts > 0 and attempts % KEEP_EVERY == 0
             if old_path != path and not keeper:
                 os.remove(old_path)
+                if os.path.exists(_stats_path(old_path)):
+                    os.remove(_stats_path(old_path))
         return path
 
 
