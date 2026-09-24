@@ -1,11 +1,39 @@
 import os
+import re
 import numpy as np
 import torch
 from stable_baselines3 import PPO
 import matplotlib.pyplot as plt
-from typing import List, Any, Optional
+from typing import Dict, List, Any, Optional
 from stable_baselines3.common.save_util import load_from_zip_file
 
+
+# Checkpoints at multiples of this many attempts are kept, the rest get replaced by the next save
+KEEP_EVERY = 1000
+
+
+def _boss_directory(boss_name: str) -> str:
+    return os.path.join("models", boss_name)
+
+
+def _checkpoints(boss_name: str) -> Dict[int, str]:
+    """Checkpoints in the boss's folder, keyed by the attempt count in their name (Lace_1_350.zip)."""
+    boss_dir = _boss_directory(boss_name)
+    if not os.path.isdir(boss_dir):
+        return {}
+
+    pattern = re.compile(rf"{re.escape(boss_name)}_(\d+)\.zip")
+    found = {}
+    for file_name in os.listdir(boss_dir):
+        match = pattern.fullmatch(file_name)
+        if match:
+            found[int(match.group(1))] = os.path.join(boss_dir, file_name)
+    return found
+
+
+def latest_checkpoint(boss_name: str) -> Optional[str]:
+    checkpoints = _checkpoints(boss_name)
+    return checkpoints[max(checkpoints)] if checkpoints else None
 
 
 
@@ -61,7 +89,8 @@ class CustomPPO(PPO):
     ) -> "CustomPPO":
         data, params, pytorch_variables = load_from_zip_file(path, device=device)
 
-        boss_name = data.get("boss_name", None)
+        # Older checkpoints carry the in-game name (lace_boss1), keep the one we're given
+        data.pop("boss_name", None)
         save_freq = data.get("save_freq", 50)
         times_trained = data.get("times_trained", 0)
         episodes_completed = data.get("episodes_completed", 0)
@@ -92,10 +121,22 @@ class CustomPPO(PPO):
         self.rollout_buffer.reset()
 
 
-    def _boss_directory(self) -> str:
-        boss_dir = self.boss_name
-        return os.path.join("models", boss_dir)
-   
+    def save_checkpoint(self) -> str:
+        """Save as models/<boss>/<boss>_<attempts>.zip, replacing the previous checkpoint unless it's a keeper."""
+        previous = _checkpoints(self.boss_name)
+
+        boss_dir = _boss_directory(self.boss_name)
+        os.makedirs(boss_dir, exist_ok=True)
+        path = os.path.join(boss_dir, f"{self.boss_name}_{self.episodes_completed}.zip")
+        self.save(path)
+        # self.plot_rewards(boss_dir)
+
+        for attempts, old_path in previous.items():
+            keeper = attempts > 0 and attempts % KEEP_EVERY == 0
+            if old_path != path and not keeper:
+                os.remove(old_path)
+        return path
+
 
     def plot_rewards(self, save_dir: str) -> None:
         """Generate and save a plot of episode rewards."""
@@ -163,12 +204,8 @@ class CustomPPO(PPO):
             self.current_episode_reward = 0.0
             
             if self.save_freq and self.episodes_completed % self.save_freq == 0:
-                save_dir = self._boss_directory()
-                os.makedirs(save_dir, exist_ok=True)
-                save_path = os.path.join(save_dir, "checkpoint")
-                self.save(save_path)
-                # self.plot_rewards(save_dir)
-                print(f"Checkpoint saved after {self.episodes_completed} episodes")
+                path = self.save_checkpoint()
+                print(f"Checkpoint saved after {self.episodes_completed} episodes: {path}")
         
         obs_t = self._obs_to_tensor(obs)
         action_t = torch.as_tensor(action).unsqueeze(0).to(self.device)
@@ -208,9 +245,5 @@ class CustomPPO(PPO):
         self.train()
         self.rollout_buffer.reset()
         self.times_trained += 1
-  
-        self.episodes_completed += 1
-        self.episode_rewards.append(self.current_episode_reward)
-        self.current_episode_reward = 0.0
-        
+
 

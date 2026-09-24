@@ -1,11 +1,10 @@
-import os
 from typing import Optional, Dict, Any, List, Tuple
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from sb3_ppo_override import CustomPPO
+from sb3_ppo_override import CustomPPO, latest_checkpoint
 
 model: Optional[CustomPPO] = None
 obs_dim: Optional[int] = None
@@ -73,10 +72,6 @@ class DummyEnv(gym.Env):
         return self._make_obs(), 0.0, True, False, {}
 
 
-def normalize_boss_name(boss_name: str) -> str:
-    return boss_name.replace(" ", "_").lower()
-
-
 def initialize_model(
     obs_size: int, 
     boss_name: str, 
@@ -98,8 +93,7 @@ def initialize_model(
     visual_height = visual_h
     action_shape = action_space_shape
 
-    normalized_boss_name = normalize_boss_name(boss_name)
-    checkpoint_path = f"models/{normalized_boss_name}/checkpoint.zip"
+    checkpoint_path = latest_checkpoint(boss_name)
 
     print(f"[RLCore] Observation type: {obs_type}")
     print(f"[RLCore] Total obs size: {obs_dim}, Vector obs size: {vector_obs_dim}")
@@ -126,12 +120,13 @@ def initialize_model(
         policy = "MlpPolicy"
         policy_kwargs = dict(net_arch=[256, 256, 128])
 
-    if os.path.exists(checkpoint_path):
+    if checkpoint_path:
         print(f"[RLCore] Loading checkpoint: {checkpoint_path}")
         model = CustomPPO.load(
             checkpoint_path,
             env=env,
             device="cpu",
+            boss_name=boss_name,
         )
         checkpoint_loaded = True
     else:
@@ -140,7 +135,7 @@ def initialize_model(
         model = CustomPPO(
             policy,
             env,
-            boss_name=normalized_boss_name,
+            boss_name=boss_name,
             verbose=1,
             n_steps=2048,
             batch_size=512,
@@ -154,11 +149,9 @@ def initialize_model(
             policy_kwargs=policy_kwargs,
         )
         checkpoint_loaded = False
-        
-        model_dir = os.path.dirname(checkpoint_path)
-        os.makedirs(model_dir, exist_ok=True)
-        model.save(checkpoint_path.replace(".zip", ""))
-        print(f"[RLCore] Saved initial checkpoint: {checkpoint_path}")
+
+        initial_path = model.save_checkpoint()
+        print(f"[RLCore] Saved initial checkpoint: {initial_path}")
 
     return {
         "initialized": True,

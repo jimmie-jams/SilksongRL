@@ -234,7 +234,8 @@ namespace SilksongRL
                     return;
                 }
 
-                string bossName = currentEncounter.GetEncounterName();
+                // The TargetBoss name (Lace_1), not the in-game one: the server names models after it
+                string bossName = configTargetBoss.Value;
                 int obsSize = currentEncounter.GetObservationSize();
                 int[] actionSpaceShape = ActionManager.GetActionSpaceShape(CurrentActionSpaceType);
                 ObservationType obsType = currentEncounter.GetObservationType();
