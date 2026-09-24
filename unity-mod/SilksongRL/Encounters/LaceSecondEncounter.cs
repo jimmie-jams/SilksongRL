@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using HutongGames.PlayMaker;
 using UnityEngine;
 
@@ -40,7 +42,12 @@ namespace SilksongRL
             CROP_RIGHT
         );
 
-        private readonly int vectorObsSize = 17;
+        // Seconds since Lace's current attack started, scaled so 1 means this long or more. Her attacks
+        // run up to about 1.9s.
+        private const float MAX_ATTACK_TIME = 2f;
+
+        // 17 values about Hornet and Lace, then Lace's attack (one-hot) and how far into it she is
+        private readonly int vectorObsSize = 17 + LaceEncounter.NUM_ATTACK_CATEGORIES + 1;
 
         public string GetEncounterName()
         {
@@ -145,6 +152,12 @@ namespace SilksongRL
             vectorObs[14] = heroJumping;
             vectorObs[15] = heroRecoiling;
             vectorObs[16] = heroInvulnerable;
+
+            AttackTracker attack = boss.GetComponent<AttackTracker>();
+            if (attack == null)
+                attack = boss.gameObject.AddComponent<AttackTracker>();
+            vectorObs[17 + (int)attack.Attack] = 1f;
+            vectorObs[17 + LaceEncounter.NUM_ATTACK_CATEGORIES] = Mathf.Clamp01((Time.time - attack.Since) / MAX_ATTACK_TIME);
 
             return vectorObs;
         }
@@ -257,6 +270,88 @@ namespace SilksongRL
         public string GetSavestateFile()
         {
             return "lace_2.json";
+        }
+
+        /// <summary>
+        /// Follows Lace's Control FSM every frame, since observations only come every StepInterval
+        /// and would otherwise see an attack start up to a step late. Lives on the boss, so every
+        /// reset starts a fresh one.
+        /// </summary>
+        private class AttackTracker : MonoBehaviour
+        {
+            public LaceEncounter.AttackCategory Attack = LaceEncounter.AttackCategory.Idle;
+            public float Since;
+
+            private PlayMakerFSM control;
+            private string state;
+
+            private void Awake()
+            {
+                control = GetComponents<PlayMakerFSM>().FirstOrDefault(fsm => fsm.FsmName == "Control");
+                Since = Time.time;
+            }
+
+            private void Update()
+            {
+                if (control == null || control.ActiveStateName == state) return;
+                state = control.ActiveStateName;
+
+                // Every wind-up (Antic) starts an attack, even the same one again: she goes straight
+                // from Slash Slam back into CrossSlash Antic, for one.
+                LaceEncounter.AttackCategory attack = MapBossState(state);
+                if (attack != Attack || state.Contains("Antic"))
+                {
+                    Attack = attack;
+                    Since = Time.time;
+                }
+            }
+        }
+
+        private static readonly HashSet<string> unknownStates = new HashSet<string>();
+
+        /// <summary>
+        /// Maps Lace 2's Control FSM states onto Lace 1's attack categories. The names come from a
+        /// LogBossStates run through the whole fight.
+        /// </summary>
+        private static LaceEncounter.AttackCategory MapBossState(string stateName)
+        {
+            stateName = stateName?.Trim() ?? "";
+
+            // Repositioning, landing after aerial attacks, and the phase shifts (they push Hornet
+            // back, but Lace can still be hit)
+            if (stateName == "" || StartsWithAny(stateName, "Idle", "Pause", "Start Battle", "Refight",
+                    "Hop", "Bounce Back", "Land", "P2 Shift", "P3 Roar"))
+                return LaceEncounter.AttackCategory.Idle;
+            // Pose Swish attacks too
+            if (StartsWithAny(stateName, "ComboSlash", "Combo Strike", "Pose"))
+                return LaceEncounter.AttackCategory.ComboSlash;
+            if (StartsWithAny(stateName, "Counter"))
+                return LaceEncounter.AttackCategory.Counter;
+            if (StartsWithAny(stateName, "RapidSlash", "Slash End"))
+                return LaceEncounter.AttackCategory.RapidSlash;
+            if (StartsWithAny(stateName, "J Slash"))
+                return LaceEncounter.AttackCategory.JSlash;
+            if (StartsWithAny(stateName, "Downstab", "Dstab"))
+                return LaceEncounter.AttackCategory.Downstab;
+            if (StartsWithAny(stateName, "Charge", "Crossup"))
+                return LaceEncounter.AttackCategory.Charge;
+            if (StartsWithAny(stateName, "Evade"))
+                return LaceEncounter.AttackCategory.Evade;
+            if (StartsWithAny(stateName, "CrossSlash", "Slash Slam"))
+                return LaceEncounter.AttackCategory.CrossSlash;
+            if (StartsWithAny(stateName, "Multihit"))
+                return LaceEncounter.AttackCategory.Multihit;
+            if (StartsWithAny(stateName, "Stun"))
+                return LaceEncounter.AttackCategory.Stun;
+
+            if (unknownStates.Add(stateName))
+                RLManager.StaticLogger?.LogWarning($"[LaceSecondEncounter] Unknown boss state: {stateName}, treating it as Idle");
+            return LaceEncounter.AttackCategory.Idle;
+        }
+
+        private static bool StartsWithAny(string value, params string[] prefixes)
+        {
+            return prefixes.Any(value.StartsWith);
         }
     }
 }

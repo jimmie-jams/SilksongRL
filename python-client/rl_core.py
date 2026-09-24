@@ -14,6 +14,7 @@ obs_type: Optional[str] = None          # 'vector' or 'hybrid'
 vector_obs_dim: Optional[int] = None    # Size of vector portion
 visual_width: Optional[int] = None      # Width of visual observation (0 if vector-only)
 visual_height: Optional[int] = None     # Height of visual observation (0 if vector-only)
+checkpoint_loaded = False
 
 
 class DummyEnv(gym.Env):
@@ -81,9 +82,29 @@ def initialize_model(
     visual_w: int = 0,
     visual_h: int = 0
 ) -> Dict[str, Any]:
-    """Initialize or load model; returns metadata about the initialization."""
+    """
+    Initialize or load model; returns metadata about the initialization. Only the first game to
+    connect builds the model. The others join it, and must be playing the same thing.
+    """
     global model, obs_dim, action_shape, current_boss, obs_type, vector_obs_dim
-    global visual_width, visual_height
+    global visual_width, visual_height, checkpoint_loaded
+
+    if model is not None:
+        joining = (boss_name, obs_size, list(action_space_shape or []), observation_type,
+                   vector_obs_size, visual_w, visual_h)
+        running = (current_boss, obs_dim, list(action_shape or []), obs_type,
+                   vector_obs_dim, visual_width, visual_height)
+        if joining != running:
+            raise ValueError(
+                f"The server is already training {current_boss} (observation size {obs_dim}, "
+                f"actions {action_shape}). A game on {boss_name} (observation size {obs_size}, "
+                f"actions {action_space_shape}) cannot join it.")
+        return {
+            "initialized": True,
+            "boss_name": boss_name,
+            "observation_size": obs_dim,
+            "checkpoint_loaded": checkpoint_loaded,
+        }
 
     obs_dim = obs_size
     current_boss = boss_name
@@ -113,22 +134,34 @@ def initialize_model(
 
     if observation_type == "hybrid" and visual_w > 0:
         policy = "MultiInputPolicy"
+        # The screen arrives as floats already in [0, 1]. SB3 only gives uint8 spaces a CNN unless
+        # told the image is normalized, and would otherwise flatten it into the MLP.
         policy_kwargs = dict(
             net_arch=[256, 256, 128],
+            normalize_images=False,
+            features_extractor_kwargs=dict(normalized_image=True),
         )
+        # The CNN trains several times faster on a GPU, if there is one
+        device = "auto"
     else:
         policy = "MlpPolicy"
         policy_kwargs = dict(net_arch=[256, 256, 128])
+        # SB3's advice for MLP-only policies: the CPU is quicker
+        device = "cpu"
 
     if checkpoint_path:
         print(f"[RLCore] Loading checkpoint: {checkpoint_path}")
         model = CustomPPO.load(
             checkpoint_path,
             env=env,
-            device="cpu",
+            device=device,
             boss_name=boss_name,
         )
         checkpoint_loaded = True
+        # A checkpoint keeps the architecture it was saved with
+        if policy == "MultiInputPolicy" and not model.policy_kwargs.get("features_extractor_kwargs", {}).get("normalized_image"):
+            print("[RLCore] WARNING: this checkpoint is from before the CNN and flattens the screen into the MLP. "
+                  "Delete it to start a new model that sees the screen through a CNN.")
     else:
         print(f"[RLCore] No checkpoint found, initializing fresh model")
         print(f"[RLCore] Using policy: {policy}")
@@ -147,6 +180,7 @@ def initialize_model(
             gae_lambda=0.95,
             max_grad_norm=0.5,
             policy_kwargs=policy_kwargs,
+            device=device,
         )
         checkpoint_loaded = False
 
@@ -184,7 +218,7 @@ def get_action(state: List[float]) -> List[int]:
     return action.tolist()
 
 
-def store_transition(state: List[float], action: List[int], reward: float, next_state: List[float], done: bool) -> None:
+def store_transition(game_id: int, state: List[float], action: List[int], reward: float, next_state: List[float], done: bool) -> None:
     if model is None:
         raise ValueError("Model not initialized")
     if len(state) != obs_dim or len(next_state) != obs_dim:
@@ -194,6 +228,12 @@ def store_transition(state: List[float], action: List[int], reward: float, next_
 
     obs = _convert_to_obs(state)
     next_obs = _convert_to_obs(next_state)
-    model.store_transition(obs, action, reward, next_obs, done)
+    model.store_transition(game_id, obs, action, reward, next_obs, done)
+
+
+def remove_game(game_id: int) -> None:
+    """A game disconnected: forget its unfinished steps."""
+    if model is not None:
+        model.remove_game(game_id)
 
 

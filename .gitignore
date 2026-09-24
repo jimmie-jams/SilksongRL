@@ -10,3 +10,5 @@ __pycache__/
 models/
 
 server_config.json
+
+python-client/instances/

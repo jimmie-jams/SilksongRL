@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from dataclasses import dataclass, field
 import numpy as np
 import torch
 from stable_baselines3 import PPO
@@ -40,6 +41,32 @@ def _stats_path(checkpoint_path: str) -> str:
     return os.path.splitext(checkpoint_path)[0] + ".json"
 
 
+@dataclass
+class _Step:
+    obs: Any
+    action: np.ndarray
+    reward: float
+    episode_start: bool
+    value: float
+    log_prob: float
+
+
+@dataclass
+class _Game:
+    """One connected game's steps since its last update, and where its current episode stands."""
+    steps: List[_Step] = field(default_factory=list)
+    last_done: bool = False
+    next_obs: Any = None
+    episode_reward: float = 0.0
+
+
+def _stack(observations: List[Any]) -> Any:
+    """Batch per-game observations, flat arrays or dicts of arrays."""
+    if isinstance(observations[0], dict):
+        return {key: np.stack([o[key] for o in observations]) for key in observations[0]}
+    return np.stack(observations)
+
+
 
 class CustomPPO(PPO):
     # Training stats, saved next to each checkpoint (Lace_1_350.json) rather than inside it
@@ -54,14 +81,15 @@ class CustomPPO(PPO):
     ) -> None:
         super().__init__(*args, **kwargs)
 
-        self.last_done = False
         self.boss_name = boss_name
         self.save_freq = save_freq
 
         self.times_trained = 0
         self.episodes_completed = 0
         self.episode_rewards: List[float] = []
-        self.current_episode_reward = 0.0
+
+        # Keyed by the server's connection id. Never saved: unfinished steps die with the server.
+        self.games: Dict[int, _Game] = {}
 
         # Initilalize logger or SB3 complains
         if not hasattr(self, '_logger') or self._logger is None:
@@ -78,7 +106,7 @@ class CustomPPO(PPO):
         return self._logger
 
     def _excluded_save_params(self) -> List[str]:
-        return super()._excluded_save_params() + list(self.STATS)
+        return super()._excluded_save_params() + list(self.STATS) + ["games"]
 
     @classmethod
     def load(cls, path: str, **kwargs: Any) -> "CustomPPO":
@@ -94,10 +122,6 @@ class CustomPPO(PPO):
             print(f"[CustomPPO] No {os.path.basename(stats_path)} next to the checkpoint, stats start from 0")
 
         return model
-
-
-    def start_new_rollout(self) -> None:
-        self.rollout_buffer.reset()
 
 
     def save_checkpoint(self) -> str:
@@ -168,31 +192,32 @@ class CustomPPO(PPO):
 
     def store_transition(
         self,
+        game_id: int,
         obs: Any,  # Can be List[float] or Dict[str, np.ndarray]
         action: List[int],
         reward: float,
         next_obs: Any,
         done: bool
     ) -> None:
-        """Store a transition in the rollout buffer."""
+        """Store one of a game's transitions, and train once there are enough (_train_while_ready)."""
         # Convert to numpy if flat list
         if isinstance(obs, list):
             obs = np.array(obs, dtype=np.float32)
         if isinstance(next_obs, list):
             next_obs = np.array(next_obs, dtype=np.float32)
         action = np.array(action, dtype=np.int32)
-        
-        self.current_episode_reward += reward
-        if done:
 
+        game = self.games.setdefault(game_id, _Game())
+        game.episode_reward += reward
+        if done:
             self.episodes_completed += 1
-            self.episode_rewards.append(self.current_episode_reward)
-            self.current_episode_reward = 0.0
-            
+            self.episode_rewards.append(game.episode_reward)
+            game.episode_reward = 0.0
+
             if self.save_freq and self.episodes_completed % self.save_freq == 0:
                 path = self.save_checkpoint()
                 print(f"Checkpoint saved after {self.episodes_completed} episodes: {path}")
-        
+
         obs_t = self._obs_to_tensor(obs)
         action_t = torch.as_tensor(action).unsqueeze(0).to(self.device)
 
@@ -203,33 +228,75 @@ class CustomPPO(PPO):
             if log_prob.dim() > 1:
                 log_prob = log_prob.sum(-1)
 
-        self.rollout_buffer.add(
-            obs=obs,
-            action=action,
-            reward=reward,
-            episode_start=self.last_done,
-            value=value.squeeze(),
-            log_prob=log_prob.squeeze(),
+        game.steps.append(_Step(obs, action, reward, game.last_done, value.item(), log_prob.item()))
+        game.last_done = done
+        game.next_obs = next_obs
+
+        self._train_while_ready()
+
+
+    def remove_game(self, game_id: int) -> None:
+        """A game disconnected. Drop its unfinished steps so it does not hold up the others."""
+        self.games.pop(game_id, None)
+        self._train_while_ready()
+
+
+    def _train_while_ready(self) -> None:
+        # Train once every game has a full share. Games that get there first keep playing, and
+        # their extra steps go into the next update. Once a game has two shares queued, train
+        # without the games still short: one that stopped sending steps (P, a failed reset) or
+        # runs slower would otherwise hold up training while the others' steps pile up.
+        n = self.n_steps
+        while True:
+            full = [g for g in self.games.values() if len(g.steps) >= n]
+            if not full or (len(full) < len(self.games) and max(len(g.steps) for g in full) < 2 * n):
+                return
+            self._train_on_games(full)
+
+
+    def _train_on_games(self, games: List[_Game]) -> None:
+        """Train on n_steps from each of these games, one buffer column per game."""
+        n = self.n_steps
+
+        # Bootstrap from what follows each game's share: its next stored step if it has one,
+        # otherwise the observation its latest transition ended on
+        last_values, dones = [], []
+        for game in games:
+            if len(game.steps) > n:
+                last_values.append(game.steps[n].value)
+                dones.append(game.steps[n].episode_start)
+            else:
+                with torch.no_grad():
+                    last_values.append(self.policy.predict_values(self._obs_to_tensor(game.next_obs)).item())
+                dones.append(game.last_done)
+
+        buffer = self.rollout_buffer_class(
+            n,
+            self.observation_space,
+            self.action_space,
+            device=self.device,
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda,
+            n_envs=len(games),
+            **self.rollout_buffer_kwargs,
         )
-        
-        self.last_done = done
-        
-        if self.rollout_buffer.pos >= self.n_steps:
-            self.finish_rollout_and_train(next_obs)
-
-
-    def finish_rollout_and_train(self, next_obs: Any) -> None:
-        """Finish a rollout and train the model."""
-        with torch.no_grad():
-            next_obs_t = self._obs_to_tensor(next_obs)
-            last_values = self.policy.predict_values(next_obs_t)
-
-        self.rollout_buffer.compute_returns_and_advantage(
-            last_values=last_values, dones=np.array([False])
+        for t in range(n):
+            row = [game.steps[t] for game in games]
+            buffer.add(
+                obs=_stack([step.obs for step in row]),
+                action=np.array([step.action for step in row]),
+                reward=np.array([step.reward for step in row], dtype=np.float32),
+                episode_start=np.array([step.episode_start for step in row], dtype=np.float32),
+                value=torch.tensor([step.value for step in row]),
+                log_prob=torch.tensor([step.log_prob for step in row]),
+            )
+        buffer.compute_returns_and_advantage(
+            last_values=torch.tensor(last_values), dones=np.array(dones, dtype=np.float32)
         )
+        for game in games:
+            del game.steps[:n]
 
+        print(f"[CustomPPO] Training on {len(games)} game(s) x {n} steps")
+        self.rollout_buffer = buffer
         self.train()
-        self.rollout_buffer.reset()
         self.times_trained += 1
-
-

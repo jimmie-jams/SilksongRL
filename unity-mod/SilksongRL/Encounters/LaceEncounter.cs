@@ -37,7 +37,7 @@ namespace SilksongRL
             Multihit = 10,
         }
 
-        private const int NUM_ATTACK_CATEGORIES = 11;
+        internal const int NUM_ATTACK_CATEGORIES = 11;
         private readonly int vectorObsSize = 10 + NUM_ATTACK_CATEGORIES;
 
         public string GetEncounterName()

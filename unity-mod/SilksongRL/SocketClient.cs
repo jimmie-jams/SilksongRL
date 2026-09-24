@@ -86,6 +86,13 @@ namespace SilksongRL
         
         public float lastPingMs = 0f;
 
+        // One connect-and-retry loop at a time: callers arriving while it runs wait on the same one
+        private Task<bool> connecting;
+        private readonly object connectingLock = new object();
+
+        // Sent again after a reconnect, since to the server a new connection is a new client
+        private string initRequestJson;
+
         public bool IsConnected => isConnected && client?.Connected == true;
 
         public SocketClient(SocketConfig config = null)
@@ -93,10 +100,20 @@ namespace SilksongRL
             this.config = config ?? new SocketConfig();
         }
 
-        public async Task<bool> ConnectAsync()
+        public Task<bool> ConnectAsync()
         {
-            if (IsConnected) return true;
+            if (IsConnected) return Task.FromResult(true);
 
+            lock (connectingLock)
+            {
+                if (connecting == null || connecting.IsCompleted)
+                    connecting = ConnectWithRetriesAsync();
+                return connecting;
+            }
+        }
+
+        private async Task<bool> ConnectWithRetriesAsync()
+        {
             for (int attempt = 0; attempt < config.MaxReconnectAttempts; attempt++)
             {
                 try
@@ -184,6 +201,7 @@ namespace SilksongRL
                 {
                     InitResponse response = JsonUtility.FromJson<InitResponse>(responseJson);
                     RLManager.StaticLogger?.LogInfo($"[SocketClient] Initialized for boss '{response.boss_name}' with observation size {response.observation_size}");
+                    initRequestJson = json;
                     return response;
                 }
                 else if (msgType == MessageType.Error)
@@ -395,7 +413,21 @@ namespace SilksongRL
         private async Task<bool> EnsureConnectedAsync()
         {
             if (IsConnected) return true;
-            return await ConnectAsync().ConfigureAwait(false);
+            if (!await ConnectAsync().ConfigureAwait(false)) return false;
+            if (initRequestJson == null) return true;
+
+            // A reconnect is a new client to the server, so introduce ourselves again. This also
+            // rebuilds the model if the server itself was restarted.
+            await SendMessageAsync(MessageType.Initialize, initRequestJson).ConfigureAwait(false);
+            var (msgType, responseJson) = await ReceiveMessageAsync().ConfigureAwait(false);
+            if (msgType != MessageType.InitResponse)
+            {
+                RLManager.StaticLogger?.LogError($"[SocketClient] Re-initializing after reconnecting failed: {responseJson}");
+                HandleConnectionErrorInternal();
+                return false;
+            }
+            RLManager.StaticLogger?.LogInfo("[SocketClient] Re-initialized after reconnecting");
+            return true;
         }
 
         private void HandleConnectionErrorInternal()

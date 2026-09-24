@@ -2,7 +2,6 @@
     "game_dir": "/home/you/.steam/steam/steamapps/common/Hollow Knight Silksong",
     "autostart": true,
 
-    "transport": "socket_sync",
     "host": "localhost",
     "port": 8000
 }

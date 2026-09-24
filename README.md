@@ -139,7 +139,13 @@ Please consult [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)
 
 - **Configurable key bindings**: The agent plays by pressing buttons. Many people do not use the default bindings so if they want to use this they'd have to change them to the default and then back so they can play. Either the key bindings should be manually configurable by the player in silksongrl.cfg or, even better, it should automatically detect the user's keybinds and use those. 
 
-- **More bosses**: Adding new bosses is always on the menu. Check out [this PR](https://github.com/jimmie-jams/SilksongRL/pull/2) to get an idea of how it's done. The general idea is you simply need to implement the IBossEncounter interface for another boss.
+- **Game speed setting**: Training usually runs at a raised game speed, which currently has to be set through Debug Mod in every game window. With several games running at once that gets tedious and is easy to get wrong, so the speed should be a setting in silksongrl.cfg that the mod applies when the game starts.
+
+- **Pausing during updates**: While the model trains on a batch of steps, every game keeps playing on its last action until the update finishes (a second or two). The steps around that gap are a bit off, so pausing the games until the server replies would be cleaner.
+
+- **Frame stacking**: The visual observation is a single frame, so the agent sees where things are but not where they're going. The vector part covers the velocities of Hornet and the boss (and, for Lace 2, which attack she's in and how far into it she is), which may well be enough. If it isn't, stacking the last few frames is the usual fix. It's easy to do on the server per game, but it multiplies the memory the images take up.
+
+- **More bosses**: Adding new bosses is always on the menu. Check out [this PR](https://github.com/jimmie-jams/SilksongRL/pull/2) to get an idea of how it's done. The general idea is you simply need to implement the IBossEncounter interface for another boss. To work out a boss's attacks, set `LogBossStates = true` in silksongrl.cfg and play the fight: every state change of the boss's FSMs gets logged (see [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)).
 
 - **More algorithms**: Not too high priority for now, but trying out more RL algorithms would be cool.
 

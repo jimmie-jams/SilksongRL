@@ -99,6 +99,16 @@ namespace SilksongRL
                 "If true, skip the intro and title screen and start training straight away, booting from " +
                 "the encounter's savestate. No save file is read or written.");
             AutoStart.Enabled = configAutoStart.Value;
+
+            // Unity's own volume, so the game's audio settings stay as they are
+            if (Config.Bind("Training", "Mute", true,
+                    "If true, the game starts muted. With several games running at once you would hear all of them.").Value)
+                AudioListener.volume = 0f;
+
+            if (Config.Bind("Debug", "LogBossStates", false,
+                    "If true, log every state change of the boss's PlayMaker FSMs and every animation it " +
+                    "plays, for working out a boss's attacks.").Value)
+                gameObject.AddComponent<BossStateLogger>();
             
             stepInterval = configStepInterval.Value;
             isInEval = configEvalMode.Value;

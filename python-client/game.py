@@ -12,6 +12,7 @@ per-instance STEAM_COMPAT_DATA_PATH - hence the compat_data_path argument on lau
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -119,6 +120,44 @@ def default_compat_data_path(steam_root: Path) -> Path:
     return steam_root / "steamapps/compatdata" / STEAM_APP_ID
 
 
+def copy_prefix(source: Path, dest: Path) -> None:
+    """
+    Make dest a copy of the Wine prefix at source, for another copy of the game to run in.
+
+    Copied rather than letting Proton build a fresh one: the game's settings live in the prefix,
+    including the first-launch calibration AutoStart needs. Symlinks stay links (many point at
+    /dev). Goes through a temporary folder so an interrupted copy is never mistaken for a
+    finished one.
+    """
+    partial = dest.with_name(dest.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    try:
+        shutil.copytree(source, partial, symlinks=True)
+    except BaseException:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    # Proton's lock file for the source prefix. It makes a new one.
+    (partial / "pfx.lock").unlink(missing_ok=True)
+    partial.rename(dest)
+
+
+def silksong_is_running() -> bool:
+    """Whether any copy of the game is running. Linux only (reads /proc), where prefixes exist."""
+    needle = WINDOWS_EXE_NAME.encode()
+    for cmdline in Path("/proc").glob("[0-9]*/cmdline"):
+        try:
+            if needle in cmdline.read_bytes():
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _windows_path(path: Path) -> str:
+    """A Linux path as a game running under Proton sees it (Z: is the Linux root)."""
+    return "Z:" + str(path.resolve()).replace("/", "\\")
+
+
 # --------------------------------------------------------------------------------------
 # Describing the install
 # --------------------------------------------------------------------------------------
@@ -149,10 +188,6 @@ class GameInstall:
     @property
     def plugin_config(self) -> Path:
         return self.bepinex_dir / "config/silksongrl.cfg"
-
-    @property
-    def bepinex_log(self) -> Path:
-        return self.bepinex_dir / "LogOutput.log"
 
     @property
     def installed_plugin(self) -> Optional[Path]:
@@ -395,14 +430,18 @@ def proton_smoke_test(install: GameInstall, compat_data_path: Optional[Path] = N
 
 
 def launch(install: GameInstall, mode: str = "auto", game_args: Optional[List[str]] = None,
-           compat_data_path: Optional[Path] = None, proton: Optional[str] = None) -> GameProcess:
+           compat_data_path: Optional[Path] = None, proton: Optional[str] = None,
+           log_file: Optional[Path] = None) -> GameProcess:
     """
     Start the game. mode is "auto", "proton" or "direct". compat_data_path picks the Wine prefix,
-    which is what gives separate instances separate saves and savestates.
+    which is what lets several copies run at once. log_file is where Unity writes its log,
+    BepInEx's output included, instead of the Player.log every copy would otherwise share.
     """
-    game_args = game_args or []
+    game_args = list(game_args or [])
     if mode == "auto":
         mode = install.default_launch_mode()
+    if log_file is not None:
+        game_args += ["-logFile", _windows_path(log_file) if mode == "proton" else str(log_file)]
 
     if mode == "proton":
         return _launch_via_proton(install, game_args, compat_data_path, proton)

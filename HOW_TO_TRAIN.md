@@ -47,9 +47,10 @@ a run does not start.
 | `--eval` / `--train` | Evaluation (inference only) or training mode |
 | `--step-interval S` | Seconds between RL steps |
 | `--port N` | Server port, set on both sides |
+| `--games N` | Start N games, all connecting to the one server (see below) |
 | `--no-game` | Only run the server; start the game yourself |
 | `--dry-run` | Report and exit |
-| `--launch-mode` | `proton`, `steam` or `direct`, if the automatic choice is wrong |
+| `--launch-mode` | `proton` or `direct`, if the automatic choice is wrong |
 | `--check-proton` | Verify Proton works without starting the game |
 
 The launcher needs to be told where Silksong is installed, the same way the mod project is told
@@ -64,7 +65,6 @@ cp server_config.json.example server_config.json
     "game_dir": "/home/you/.steam/steam/steamapps/common/Hollow Knight Silksong",
     "autostart": true,
 
-    "transport": "socket_sync",
     "host": "localhost",
     "port": 8000
 }
@@ -86,8 +86,22 @@ python launch.py --check-proton
 your setup, `--no-game` runs just the server and you start the game however you like.
 
 Under Proton the game's save data lives *inside the Wine prefix*, so both your save file and
-DebugMod's savestates do too. `--compat-data-path` selects a different prefix, which is what will keep
-parallel instances from trampling each other's saves.
+DebugMod's savestates do too. `--compat-data-path` selects a different prefix.
+
+### Running several games
+
+`--games N` starts N games, one after another, all connecting to the one server. Under Proton two
+games cannot share a Wine prefix (Proton only starts a game once everything else running in its
+prefix has exited), so game 1 uses your usual prefix and every other game gets its own copy of it in
+`python-client/instances/<n>/prefix`. Copies are made the first time, about 300 MB each, and only
+while no game is running. Delete an instance's folder to reset it. Each game logs to
+`python-client/instances/<n>/game.log`.
+
+All the games train the one model. Each update waits until every connected game has 2048 new
+steps; a game that gets there first keeps playing, and its extra steps go into the next update.
+Once a game has 4096 steps waiting, the update goes ahead without the games that are still short, so
+a game that stopped (P pressed, a failed reset) or runs at a lower game speed does not hold up the rest.
+Attempts are counted across all the games, so checkpoint names and saves work as with one game.
 
 If you would rather start the game yourself, use `--no-game` and the launcher behaves as it used to -
 just the server, waiting for the mod to connect.
@@ -181,6 +195,8 @@ leaves the rest of the file, comments included, alone.
 
 ### NOTES:
 
+- The game starts muted. For sound, set `Mute = false` under `[Training]` in `BepInEx/config/silksongrl.cfg`.
+
 - You can increase the timescale throught Debug mod and the training will function fine as the steps are executed in Unity's FixedUpdate.
 
 - If you want to load saved model weights, put the checkpoint in `python-client/models/<boss>/`, named `<boss>_<attempts>.zip`, where `<boss>` is what you pass to `--boss` (e.g. `models/Lace_1/Lace_1_2400.zip`). Copy the `.json` of the same name along with it, if there is one: it holds the training stats (attempts, reward history). If there are several checkpoints, the one with the most attempts is loaded. Each new save replaces the previous checkpoint, except every 1000 attempts (`Lace_1_1000.zip`, `Lace_1_2000.zip`, ...), which are kept.
@@ -188,5 +204,7 @@ leaves the rest of the file, comments included, alone.
 - As this system runs in real time rather than assuming full control of the game, there will be slight deviations in the latency with which things run on different machines. This shouldn't cause too big of an issue. That being said, performance may degrade slightly if we try a model that is used to a certain amount of ms on an environment with less or more.
 
 - To play, the agent relies on key presses. This means that if you don't have the default key bindings, it will be pressing the wrong buttons.
+
+- To work out a boss's attacks (for a new encounter, say), set `LogBossStates = true` under `[Debug]` in `BepInEx/config/silksongrl.cfg`. Every state change of the boss's PlayMaker FSMs, and every animation it plays, then goes to the game's log (`python-client/instances/<n>/game.log`) as `[BossStates]` lines, with the boss's HP and how long each state lasted. Play the fight yourself with the agent off (P) and DebugMod's invincibility on to see every phase.
 
 - For encounters that have a visual observation, your resolution and video settings matter. On a different aspect ratio or with more/less particles, shadows etc. the agent's input will not be the same. I'm not quite sure how catastrophic this would be for performance but it will most definitely have an effect. 
