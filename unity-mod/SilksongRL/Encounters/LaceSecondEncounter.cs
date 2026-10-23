@@ -46,8 +46,9 @@ namespace SilksongRL
         // run up to about 1.9s.
         private const float MAX_ATTACK_TIME = 2f;
 
-        // 17 values about Hornet and Lace, then Lace's attack (one-hot) and how far into it she is
-        private readonly int vectorObsSize = 17 + LaceEncounter.NUM_ATTACK_CATEGORIES + 1;
+        // 17 values about Hornet and Lace, then Lace's attack (one-hot) and how far into it she is, then
+        // Hornet's silk
+        private readonly int vectorObsSize = 17 + LaceEncounter.NUM_ATTACK_CATEGORIES + 1 + 1;
 
         public string GetEncounterName()
         {
@@ -56,7 +57,7 @@ namespace SilksongRL
 
         public ActionSpaceType GetActionSpaceType()
         {
-            return ActionSpaceType.Extended;
+            return ActionSpaceType.ExtendedBind;
         }
 
         public ObservationType GetObservationType()
@@ -158,6 +159,10 @@ namespace SilksongRL
                 attack = boss.gameObject.AddComponent<AttackTracker>();
             vectorObs[17 + (int)attack.Attack] = 1f;
             vectorObs[17 + LaceEncounter.NUM_ATTACK_CATEGORIES] = Mathf.Clamp01((Time.time - attack.Since) / MAX_ATTACK_TIME);
+
+            // Bind costs 9 silk, this savestate's whole spool, so 1 means she can heal
+            vectorObs[17 + LaceEncounter.NUM_ATTACK_CATEGORIES + 1] =
+                Mathf.Clamp01((float)hero.playerData.silk / Mathf.Max(1, hero.playerData.silkMax));
 
             return vectorObs;
         }

@@ -38,6 +38,9 @@ namespace SilksongRL
         public float reward;
         public float[] next_state;
         public bool done;
+        // How the episode went, only meaningful when done
+        public int boss_hp;
+        public float episode_seconds;
     }
 
     [Serializable]
@@ -275,7 +278,7 @@ namespace SilksongRL
             }
         }
 
-        public async Task<bool> StoreTransitionAsync(float[] observations, Action action, float reward, float[] nextObservations, bool done)
+        public async Task<bool> StoreTransitionAsync(float[] observations, Action action, float reward, float[] nextObservations, bool done, int bossHp, float episodeSeconds)
         {
             // Acquire lock to prevent concurrent socket operations
             await socketLock.WaitAsync().ConfigureAwait(false);
@@ -289,7 +292,9 @@ namespace SilksongRL
                     action = ActionManager.ActionToArray(action, RLManager.CurrentActionSpaceType),
                     reward = reward,
                     next_state = nextObservations,
-                    done = done
+                    done = done,
+                    boss_hp = bossHp,
+                    episode_seconds = episodeSeconds
                 };
 
                 string json = JsonUtility.ToJson(request);

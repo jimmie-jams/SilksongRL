@@ -29,6 +29,8 @@ namespace SilksongRL
     ///     public void AfterDeserialize()                  -- rebuilds customData from customDataList
     ///     public string saveStateIdentifier
     ///     public PlayerData savedPd / public SceneData savedSd -- the world state, used by AutoStart
+    ///   MonoBehaviours/TimeScale.cs
+    ///     public static float CustomTimeScale { get; set; } -- game speed, used for GameSpeed
     ///
 
     /// </summary>
@@ -48,6 +50,7 @@ namespace SilksongRL
         private static FieldInfo identifierField;
         private static FieldInfo savedPdField;
         private static FieldInfo savedSdField;
+        private static PropertyInfo customTimeScaleProperty;
 
         /// <summary>True when DebugMod is present and every member we need was resolved.</summary>
         public static bool IsAvailable { get; private set; }
@@ -112,6 +115,10 @@ namespace SilksongRL
                     Fail("DebugMod's savestate API does not look the way we expect (version mismatch?)");
                     return;
                 }
+
+                // Optional: only GameSpeed needs it
+                customTimeScaleProperty = asm.GetType("DebugMod.MonoBehaviours.TimeScale")?
+                    .GetProperty("CustomTimeScale", BindingFlags.Public | BindingFlags.Static);
 
                 IsAvailable = true;
                 RLManager.StaticLogger?.LogInfo($"[SaveStates] Hooked DebugMod savestate loader (version {info.Metadata.Version})");
@@ -258,6 +265,26 @@ namespace SilksongRL
             catch (Exception e)
             {
                 RLManager.StaticLogger?.LogError($"[SaveStates] Could not copy the savestate's world data: {e.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Sets DebugMod's game speed, the same value its Timescale control changes. DebugMod does
+        /// what running above 1x needs: the game caps its time scale at 1 unless cheats are on, and
+        /// hit-stop freezes would otherwise last as long in real time at any speed.
+        /// </summary>
+        public static bool TrySetGameSpeed(float speed)
+        {
+            if (customTimeScaleProperty == null) return false;
+            try
+            {
+                customTimeScaleProperty.SetValue(null, speed, null);
+                return true;
+            }
+            catch (Exception e)
+            {
+                RLManager.StaticLogger?.LogError($"[SaveStates] Could not set DebugMod's timescale: {e.Message}");
                 return false;
             }
         }

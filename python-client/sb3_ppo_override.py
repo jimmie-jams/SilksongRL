@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import re
@@ -11,6 +12,10 @@ from typing import Dict, List, Any, Optional
 
 # Checkpoints at multiples of this many attempts are kept, the rest get replaced by the next save
 KEEP_EVERY = 1000
+
+# What SB3's train() records about each update, appended to models/<boss>/updates.csv
+UPDATE_METRICS = ("entropy_loss", "policy_gradient_loss", "value_loss", "approx_kl", "clip_fraction",
+                  "explained_variance")
 
 
 def _boss_directory(boss_name: str) -> str:
@@ -58,6 +63,7 @@ class _Game:
     last_done: bool = False
     next_obs: Any = None
     episode_reward: float = 0.0
+    episode_steps: int = 0
 
 
 def _stack(observations: List[Any]) -> Any:
@@ -70,7 +76,8 @@ def _stack(observations: List[Any]) -> Any:
 
 class CustomPPO(PPO):
     # Training stats, saved next to each checkpoint (Lace_1_350.json) rather than inside it
-    STATS = ("episodes_completed", "times_trained", "episode_rewards")
+    STATS = ("episodes_completed", "times_trained", "episode_rewards", "episode_boss_hp", "episode_seconds",
+             "episode_steps")
 
     def __init__(
         self,
@@ -87,6 +94,11 @@ class CustomPPO(PPO):
         self.times_trained = 0
         self.episodes_completed = 0
         self.episode_rewards: List[float] = []
+        # Per episode like episode_rewards: the boss's HP when it ended, its length in game seconds,
+        # and how many steps it got
+        self.episode_boss_hp: List[int] = []
+        self.episode_seconds: List[float] = []
+        self.episode_steps: List[int] = []
 
         # Keyed by the server's connection id. Never saved: unfinished steps die with the server.
         self.games: Dict[int, _Game] = {}
@@ -197,9 +209,14 @@ class CustomPPO(PPO):
         action: List[int],
         reward: float,
         next_obs: Any,
-        done: bool
+        done: bool,
+        boss_hp: int,
+        episode_seconds: float
     ) -> None:
-        """Store one of a game's transitions, and train once there are enough (_train_while_ready)."""
+        """
+        Store one of a game's transitions, and train once there are enough (_train_while_ready).
+        boss_hp and episode_seconds describe how the episode went, and are only read when done.
+        """
         # Convert to numpy if flat list
         if isinstance(obs, list):
             obs = np.array(obs, dtype=np.float32)
@@ -209,10 +226,15 @@ class CustomPPO(PPO):
 
         game = self.games.setdefault(game_id, _Game())
         game.episode_reward += reward
+        game.episode_steps += 1
         if done:
             self.episodes_completed += 1
             self.episode_rewards.append(game.episode_reward)
+            self.episode_boss_hp.append(boss_hp)
+            self.episode_seconds.append(round(episode_seconds, 1))
+            self.episode_steps.append(game.episode_steps)
             game.episode_reward = 0.0
+            game.episode_steps = 0
 
             if self.save_freq and self.episodes_completed % self.save_freq == 0:
                 path = self.save_checkpoint()
@@ -300,3 +322,16 @@ class CustomPPO(PPO):
         self.rollout_buffer = buffer
         self.train()
         self.times_trained += 1
+        self._log_update()
+
+
+    def _log_update(self) -> None:
+        """Append the update's metrics to updates.csv. SB3 records them, but only learn() would write them out."""
+        path = os.path.join(_boss_directory(self.boss_name), "updates.csv")
+        new_file = not os.path.exists(path)
+        with open(path, "a", newline="") as f:
+            writer = csv.writer(f)
+            if new_file:
+                writer.writerow(("update", "episodes") + UPDATE_METRICS)
+            writer.writerow([self.times_trained, self.episodes_completed] +
+                            [self.logger.name_to_value[f"train/{name}"] for name in UPDATE_METRICS])

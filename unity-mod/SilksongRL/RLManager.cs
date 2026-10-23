@@ -24,6 +24,7 @@ namespace SilksongRL
         private ConfigEntry<bool> configEvalMode;
         private ConfigEntry<string> configSavestateFile;
         private ConfigEntry<bool> configAutoStart;
+        private ConfigEntry<float> configGameSpeed;
 
         public static bool isAgentControlEnabled = false;
 
@@ -66,6 +67,15 @@ namespace SilksongRL
 
         private float lastStepTime = 0f;
 
+        // Per-episode step accounting, logged when the episode ends
+        private int stepsDue, stepsSkipped, transitionsSent, stepsTimed;
+        private double stepMsTotal;
+        private float episodeStartReal, episodeStartGame, resetStartReal = -1f;
+
+        // How the episode that just ended went, sent along with its final transition
+        private int episodeEndBossHp;
+        private float episodeEndSeconds;
+
         // P, or AutoStart, arms the run; agent control switches on once the game has been ready for
         // ReadySeconds. Enabling it any earlier - during the intro, say - makes the first reset load a
         // savestate before the HUD exists, which DebugMod cannot survive.
@@ -99,6 +109,10 @@ namespace SilksongRL
                 "If true, skip the intro and title screen and start training straight away, booting from " +
                 "the encounter's savestate. No save file is read or written.");
             AutoStart.Enabled = configAutoStart.Value;
+            configGameSpeed = Config.Bind("Training", "GameSpeed", 1f,
+                new ConfigDescription("Game speed once the agent takes control, e.g. 2 for double speed. " +
+                    "Set through DebugMod's Timescale, which still shows it and can change it.",
+                    new AcceptableValueRange<float>(0.1f, 10f)));
 
             // Unity's own volume, so the game's audio settings stay as they are
             if (Config.Bind("Training", "Mute", true,
@@ -368,6 +382,7 @@ namespace SilksongRL
                 // HeroDead or HeroStuck = hero died (0), BossDead = boss died (1)
                 whoDied = (episodeManager.CurrentState == TrainingEpisodeManager.EpisodeState.BossDead) ? 1 : 0;
                 StaticLogger.LogInfo($"[RL] Episode ended - will store final transition with done=true");
+                RecordEpisodeEnd();
             }
 
             // Handle reset sequence if needed
@@ -386,9 +401,15 @@ namespace SilksongRL
 
         private async Task StepRLAsync()
         {
-            if (isProcessingStep) return;
+            stepsDue++;
+            if (isProcessingStep)
+            {
+                stepsSkipped++;
+                return;
+            }
 
             isProcessingStep = true;
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
@@ -410,11 +431,14 @@ namespace SilksongRL
                 {
                     float reward = currentEncounter.CalculateReward(previousObservations, currentObservations, whoDied);
                     bool done = pendingDoneTransition;
+                    int bossHp = episodeEndBossHp;
+                    float episodeSeconds = episodeEndSeconds;
 
                     // Run socket call off the main thread
                     await Task.Run(async () =>
                     {
-                        await client.StoreTransitionAsync(previousObservations, previousAction, reward, currentObservations, done).ConfigureAwait(false);
+                        if (await client.StoreTransitionAsync(previousObservations, previousAction, reward, currentObservations, done, bossHp, episodeSeconds).ConfigureAwait(false))
+                            transitionsSent++;
                     }).ConfigureAwait(false);
                     
                     // If this was a terminal transition, clear previous step data and don't get new action
@@ -455,8 +479,37 @@ namespace SilksongRL
             }
             finally
             {
+                stepMsTotal += stopwatch.Elapsed.TotalMilliseconds;
+                stepsTimed++;
                 isProcessingStep = false;
             }
+        }
+
+        /// <summary>
+        /// Keeps the boss's remaining HP and the fight's length for the final transition, and logs
+        /// how many steps the episode got, then starts counting the next one. A step is skipped when
+        /// the previous one has not finished.
+        /// </summary>
+        private void RecordEpisodeEnd()
+        {
+            float fightReal = Time.realtimeSinceStartup - episodeStartReal;
+            float fightGame = Time.fixedTime - episodeStartGame;
+            episodeEndBossHp = Boss != null ? Boss.hp : 0;
+            episodeEndSeconds = fightGame;
+            StaticLogger.LogInfo(
+                $"[RL] Episode stats: {fightGame:F1}s game, {fightReal:F1}s real, {stepsDue} steps due, " +
+                $"{stepsSkipped} skipped, {transitionsSent} transitions sent, " +
+                $"{(stepsTimed > 0 ? stepMsTotal / stepsTimed : 0):F0} ms per step");
+
+            stepsDue = stepsSkipped = transitionsSent = stepsTimed = 0;
+            stepMsTotal = 0;
+            resetStartReal = Time.realtimeSinceStartup;
+        }
+
+        private void StartEpisodeClock()
+        {
+            episodeStartReal = Time.realtimeSinceStartup;
+            episodeStartGame = Time.fixedTime;
         }
 
 
@@ -523,9 +576,15 @@ namespace SilksongRL
 
             isArmed = false;
             isAgentControlEnabled = true;
+            StartEpisodeClock();
             StaticLogger.LogInfo(Boss == null
                 ? "[RL] Agent control enabled. Not in the arena yet, so the first reset loads the encounter."
                 : "[RL] Agent control enabled.");
+
+            if (DebugModSaveStates.TrySetGameSpeed(configGameSpeed.Value))
+                StaticLogger.LogInfo($"[RL] Game speed {configGameSpeed.Value:0.##}x");
+            else
+                StaticLogger.LogWarning("[RL] Could not set GameSpeed: DebugMod's Timescale was not found.");
         }
 
         /// <summary>
@@ -548,6 +607,11 @@ namespace SilksongRL
             // because we need to store the final transition with done=true on the first step of the new episode
             currentAction = new Action();
             isProcessingStep = false;
+
+            if (resetStartReal >= 0f)
+                StaticLogger.LogInfo($"[RL] Reset took {Time.realtimeSinceStartup - resetStartReal:F1}s real");
+            resetStartReal = -1f;
+            StartEpisodeClock();
         }
 
         /// <summary>

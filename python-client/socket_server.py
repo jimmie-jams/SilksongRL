@@ -170,5 +170,7 @@ class RLSocketServer:
                 payload['reward'],
                 payload['next_state'],
                 payload['done'],
+                payload['boss_hp'],
+                payload['episode_seconds'],
             )
         self.send_message(conn, MessageType.TRANSITION_ACK, {'success': True})

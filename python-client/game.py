@@ -369,6 +369,9 @@ def _launch_via_proton(install: GameInstall, game_args: List[str],
     env.setdefault("SteamGameId", STEAM_APP_ID)
     env["STEAM_COMPAT_APP_ID"] = STEAM_APP_ID
     _add_doorstop_dll_override(env)
+    # No vsync, a frame cap instead. With the screens asleep Xwayland paces vsynced frames at
+    # about 1 fps, which slows the game itself down.
+    env.setdefault("DXVK_CONFIG", "dxgi.syncInterval = 0; dxgi.maxFrameRate = 60")
 
     ensure_steam_appid_file(install)
 

@@ -218,7 +218,8 @@ def get_action(state: List[float]) -> List[int]:
     return action.tolist()
 
 
-def store_transition(game_id: int, state: List[float], action: List[int], reward: float, next_state: List[float], done: bool) -> None:
+def store_transition(game_id: int, state: List[float], action: List[int], reward: float, next_state: List[float], done: bool,
+                     boss_hp: int, episode_seconds: float) -> None:
     if model is None:
         raise ValueError("Model not initialized")
     if len(state) != obs_dim or len(next_state) != obs_dim:
@@ -228,7 +229,7 @@ def store_transition(game_id: int, state: List[float], action: List[int], reward
 
     obs = _convert_to_obs(state)
     next_obs = _convert_to_obs(next_state)
-    model.store_transition(game_id, obs, action, reward, next_obs, done)
+    model.store_transition(game_id, obs, action, reward, next_obs, done, boss_hp, episode_seconds)
 
 
 def remove_game(game_id: int) -> None:

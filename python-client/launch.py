@@ -62,7 +62,7 @@ def build_server(host: str, port: int):
     return server.start, f"socket server on {host}:{port}"
 
 
-def apply_mod_config(install, boss, port, eval_mode, step_interval, autostart):
+def apply_mod_config(install, boss, port, eval_mode, step_interval, game_speed, autostart):
     """Push launcher options into the mod's config."""
     # Always written, so server_config.json decides rather than whatever the mod's config last held.
     # For the port that is what keeps the mod dialling the port the server is on.
@@ -76,6 +76,8 @@ def apply_mod_config(install, boss, port, eval_mode, step_interval, autostart):
         values[("Training", "EvalMode")] = "true" if eval_mode else "false"
     if step_interval is not None:
         values[("Training", "StepInterval")] = str(step_interval)
+    if game_speed is not None:
+        values[("Training", "GameSpeed")] = str(game_speed)
 
     if not values:
         return True
@@ -215,6 +217,8 @@ def main():
                         help="Force training mode, overriding whatever the mod config says.")
     parser.add_argument("--step-interval", type=float, metavar="SECONDS",
                         help="Seconds between RL steps (mod's StepInterval).")
+    parser.add_argument("--game-speed", type=float, metavar="X",
+                        help="Game speed once the agent takes control, e.g. 2 for double (mod's GameSpeed).")
     parser.add_argument("--host", help="Address to bind the server to.")
     parser.add_argument("--port", type=int, help="Port to bind the server to. Also set on the mod.")
     parser.add_argument("--launch-mode", choices=("auto", "proton", "direct"), default="auto",
@@ -302,12 +306,14 @@ def main():
                     f"Port={port}" if current_port != str(port) else None,
                     f"EvalMode={args.eval_mode}" if args.eval_mode is not None else None,
                     f"StepInterval={args.step_interval}" if args.step_interval is not None else None,
+                    f"GameSpeed={args.game_speed}" if args.game_speed is not None else None,
                     f"AutoStart={autostart}" if current_autostart != autostart else None,
                 ])) or "nothing"))
         return
 
     if install is not None:
-        apply_mod_config(install, boss, port, args.eval_mode, args.step_interval, autostart)
+        apply_mod_config(install, boss, port, args.eval_mode, args.step_interval, args.game_speed,
+                         autostart)
         warn_about_setup(install, autostart)
     elif boss is not None:
         print("[Launcher] WARNING: could not find the game, so --boss was not applied. "

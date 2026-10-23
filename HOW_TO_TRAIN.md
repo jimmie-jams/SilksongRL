@@ -46,6 +46,7 @@ a run does not start.
 | `--boss NAME` | Encounter to train on |
 | `--eval` / `--train` | Evaluation (inference only) or training mode |
 | `--step-interval S` | Seconds between RL steps |
+| `--game-speed X` | Game speed while the agent plays, e.g. `2` for double speed |
 | `--port N` | Server port, set on both sides |
 | `--games N` | Start N games, all connecting to the one server (see below) |
 | `--no-game` | Only run the server; start the game yourself |
@@ -197,7 +198,7 @@ leaves the rest of the file, comments included, alone.
 
 - The game starts muted. For sound, set `Mute = false` under `[Training]` in `BepInEx/config/silksongrl.cfg`.
 
-- You can increase the timescale throught Debug mod and the training will function fine as the steps are executed in Unity's FixedUpdate.
+- To train faster, raise the game speed with `--game-speed` (or `GameSpeed` under `[Training]` in `silksongrl.cfg`). It is applied when the agent takes control, through DebugMod's Timescale, so every game runs at the same speed and DebugMod's panel still shows it. Steps are counted in game time, so the agent acts just as often in game time at any speed. The ping counter is in game time too, and it only times half of each step (getting the action; sending the previous step takes about as long). If it sits around half the step interval (50 ms by default) during fights, steps are being skipped, so lower the speed. Brief spikes when Hornet dies or respawns, and one very large reading when the model updates, are expected.
 
 - If you want to load saved model weights, put the checkpoint in `python-client/models/<boss>/`, named `<boss>_<attempts>.zip`, where `<boss>` is what you pass to `--boss` (e.g. `models/Lace_1/Lace_1_2400.zip`). Copy the `.json` of the same name along with it, if there is one: it holds the training stats (attempts, reward history). If there are several checkpoints, the one with the most attempts is loaded. Each new save replaces the previous checkpoint, except every 1000 attempts (`Lace_1_1000.zip`, `Lace_1_2000.zip`, ...), which are kept.
 

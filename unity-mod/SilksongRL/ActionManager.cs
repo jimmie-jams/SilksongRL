@@ -17,7 +17,10 @@ namespace SilksongRL
         Basic,
 
         // Extended: move, look, jump, attack, dash (5 actions)
-        Extended
+        Extended,
+
+        // ExtendedBind: Extended, with bind as a third choice in the attack slot (none/attack/bind)
+        ExtendedBind
     }
 
     public class Action
@@ -28,6 +31,7 @@ namespace SilksongRL
         public bool attack;
         // Extended action space fields
         public bool dash;
+        public bool bind;
 
 
         public Action()
@@ -37,6 +41,7 @@ namespace SilksongRL
             jump = false;
             attack = false;
             dash = false;
+            bind = false;
         }
     }
 
@@ -54,6 +59,8 @@ namespace SilksongRL
                     return new int[] { 3, 3, 2, 2 };        // move(3), look(3), jump(2), attack(2)
                 case ActionSpaceType.Extended:
                     return new int[] { 3, 3, 2, 2, 2 };     // + dash(2)
+                case ActionSpaceType.ExtendedBind:
+                    return new int[] { 3, 3, 2, 3, 2 };     // attack(2) becomes none/attack/bind(3)
                 default:
                     throw new System.ArgumentException($"Unknown action space type: {type}");
             }
@@ -82,9 +89,14 @@ namespace SilksongRL
                 attack = response.action[3] == 1
             };
 
-            if (type == ActionSpaceType.Extended)
+            if (type == ActionSpaceType.Extended || type == ActionSpaceType.ExtendedBind)
             {
                 action.dash = response.action[4] == 1;
+            }
+
+            if (type == ActionSpaceType.ExtendedBind)
+            {
+                action.bind = response.action[3] == 2;
             }
 
             return action;
@@ -110,6 +122,15 @@ namespace SilksongRL
                         (int)action.look,
                         action.jump ? 1 : 0,
                         action.attack ? 1 : 0,
+                        action.dash ? 1 : 0
+                    };
+                case ActionSpaceType.ExtendedBind:
+                    return new int[]
+                    {
+                        (int)action.move,
+                        (int)action.look,
+                        action.jump ? 1 : 0,
+                        action.bind ? 2 : action.attack ? 1 : 0,
                         action.dash ? 1 : 0
                     };
                 default:
@@ -144,12 +165,21 @@ namespace SilksongRL
             }
 
             // Extended keys
-            if (type == ActionSpaceType.Extended)
+            if (type == ActionSpaceType.Extended || type == ActionSpaceType.ExtendedBind)
             {
                 switch (keyName)
                 {
                     case "c":
                         return action.dash;
+                }
+            }
+
+            if (type == ActionSpaceType.ExtendedBind)
+            {
+                switch (keyName)
+                {
+                    case "a":
+                        return action.bind;
                 }
             }
 
