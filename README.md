@@ -133,8 +133,6 @@ Please consult [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)
 
 ## Future plans
 
-- **Action visualization**: Either with a simple custon keyviz-like visualizer or something that looks like NN nodes with the selected actions flashing (Honestly, not sure if this will look too great because of just how often actions are taken but we'll see).
-
 - **Savage Beastfly overhaul**: Savage Beastfly has summons but those are not explicitly accounted for by either the state or reward definition. For the state this may be fine as the agent can still see them through the visual component, but reward should definitely be given on hitting/killing them.
 
 - **Configurable key bindings**: The agent plays by pressing buttons. Many people do not use the default bindings so if they want to use this they'd have to change them to the default and then back so they can play. Either the key bindings should be manually configurable by the player in silksongrl.cfg or, even better, it should automatically detect the user's keybinds and use those. 

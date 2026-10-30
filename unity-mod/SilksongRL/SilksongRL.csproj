@@ -120,6 +120,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ActionManager.cs" />
+    <Compile Include="ActionOverlay.cs" />
     <Compile Include="Encounters\BossStateLogger.cs" />
     <Compile Include="Encounters\IBossEncounter.cs" />
     <Compile Include="Encounters\LaceEncounter.cs" />
@@ -140,6 +141,9 @@
     <Compile Include="SocketClient.cs" />
     <Compile Include="TrainingEpisodeManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Icons\*.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

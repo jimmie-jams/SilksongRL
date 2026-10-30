@@ -23,7 +23,6 @@ namespace SilksongRL
         private ConfigEntry<float> configStepInterval;
         private ConfigEntry<bool> configEvalMode;
         private ConfigEntry<string> configSavestateFile;
-        private ConfigEntry<bool> configAutoStart;
         private ConfigEntry<float> configGameSpeed;
 
         public static bool isAgentControlEnabled = false;
@@ -105,10 +104,7 @@ namespace SilksongRL
             configSavestateFile = Config.Bind("Training", "SavestateFile", "",
                 "Savestate to reset to. Either a file name inside the \"savestates\" folder next to " +
                 "SilksongRL.dll, or an absolute path. Empty uses the file the selected encounter asks for.");
-            configAutoStart = Config.Bind("Training", "AutoStart", false,
-                "If true, skip the intro and title screen and start training straight away, booting from " +
-                "the encounter's savestate. No save file is read or written.");
-            AutoStart.Enabled = configAutoStart.Value;
+            AutoStart.Enabled = Array.IndexOf(Environment.GetCommandLineArgs(), AutoStart.Argument) >= 0;
             configGameSpeed = Config.Bind("Training", "GameSpeed", 1f,
                 new ConfigDescription("Game speed once the agent takes control, e.g. 2 for double speed. " +
                     "Set through DebugMod's Timescale, which still shows it and can change it.",
@@ -123,7 +119,12 @@ namespace SilksongRL
                     "If true, log every state change of the boss's PlayMaker FSMs and every animation it " +
                     "plays, for working out a boss's attacks.").Value)
                 gameObject.AddComponent<BossStateLogger>();
-            
+
+            if (Config.Bind("Display", "ShowActions", true,
+                    "If true, show the agent's actions as lit nodes along the top, right of Hornet's health. " +
+                    "The agent never sees them: they are drawn after the screen capture.").Value)
+                gameObject.AddComponent<ActionOverlay>();
+
             stepInterval = configStepInterval.Value;
             isInEval = configEvalMode.Value;
             

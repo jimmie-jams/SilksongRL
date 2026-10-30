@@ -29,6 +29,10 @@ INSTANCES_DIR = Path(__file__).resolve().parent / "instances"
 # First line RLManager.Awake logs
 MOD_LOADED_LINE = "SilksongRL Mod loaded"
 
+# Makes the mod boot straight into training (AutoStart.Argument). Passed to the games we start
+# rather than set in the mod's config, so a game started from Steam still gets the menus.
+AUTOSTART_ARG = "-silksongrl-autostart"
+
 DEFAULT_CONFIG = {
     "host": "localhost",
     "port": 8000,
@@ -62,14 +66,10 @@ def build_server(host: str, port: int):
     return server.start, f"socket server on {host}:{port}"
 
 
-def apply_mod_config(install, boss, port, eval_mode, step_interval, game_speed, autostart):
+def apply_mod_config(install, boss, port, eval_mode, step_interval, game_speed):
     """Push launcher options into the mod's config."""
-    # Always written, so server_config.json decides rather than whatever the mod's config last held.
-    # For the port that is what keeps the mod dialling the port the server is on.
-    values = {
-        ("Training", "AutoStart"): "true" if autostart else "false",
-        ("Connection", "Port"): str(port),
-    }
+    # Always written, so the mod dials the port the server is on rather than whatever it last held.
+    values = {("Connection", "Port"): str(port)}
     if boss is not None:
         values[("Training", "TargetBoss")] = boss
     if eval_mode is not None:
@@ -277,12 +277,9 @@ def main():
         sys.exit(0 if ok else 1)
 
     if args.dry_run:
-        current_autostart = current_port = None
+        current_port = None
         if install is not None:
-            mod_config = ModConfig(install.plugin_config)
-            current = mod_config.read("Training", "AutoStart")
-            current_autostart = None if current is None else current.strip().lower() == "true"
-            current = mod_config.read("Connection", "Port")
+            current = ModConfig(install.plugin_config).read("Connection", "Port")
             current_port = None if current is None else current.strip()
         if install is not None:
             try:
@@ -307,13 +304,11 @@ def main():
                     f"EvalMode={args.eval_mode}" if args.eval_mode is not None else None,
                     f"StepInterval={args.step_interval}" if args.step_interval is not None else None,
                     f"GameSpeed={args.game_speed}" if args.game_speed is not None else None,
-                    f"AutoStart={autostart}" if current_autostart != autostart else None,
                 ])) or "nothing"))
         return
 
     if install is not None:
-        apply_mod_config(install, boss, port, args.eval_mode, args.step_interval, args.game_speed,
-                         autostart)
+        apply_mod_config(install, boss, port, args.eval_mode, args.step_interval, args.game_speed)
         warn_about_setup(install, autostart)
     elif boss is not None:
         print("[Launcher] WARNING: could not find the game, so --boss was not applied. "
@@ -323,7 +318,8 @@ def main():
 
     if args.no_game:
         print(f"[Launcher] Starting {description}")
-        print("[Launcher] Start the game yourself; the mod will connect here.")
+        print("[Launcher] Start the game yourself; the mod will connect here. Load a save and press P, "
+              f"or add {AUTOSTART_ARG} to the game's launch options to start training on its own.")
         try:
             runner()
         except KeyboardInterrupt:
@@ -350,6 +346,7 @@ def main():
         print("[Launcher] Server did not start within 30s, giving up.")
         sys.exit(1)
 
+    game_args = [AUTOSTART_ARG] if autostart else []
     processes = {}
     try:
         for n, prefix in enumerate(prefixes, 1):
@@ -358,8 +355,9 @@ def main():
             # Last run's log would read as this game having loaded already
             log_file.unlink(missing_ok=True)
             print(f"[Launcher] Starting game {n} of {args.games}, logging to {log_file}")
-            processes[n] = game_module.launch(install, mode=mode, compat_data_path=prefix,
-                                              proton=args.proton, log_file=log_file)
+            processes[n] = game_module.launch(install, mode=mode, game_args=game_args,
+                                              compat_data_path=prefix, proton=args.proton,
+                                              log_file=log_file)
             # Waiting also staggers the games, which share BepInEx's startup cache
             loaded = wait_for_mod(n, processes[n], log_file, install.needs_proton)
             if not loaded and not processes[n].is_running:

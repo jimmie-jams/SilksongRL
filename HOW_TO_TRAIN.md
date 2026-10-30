@@ -105,7 +105,9 @@ a game that stopped (P pressed, a failed reset) or runs at a lower game speed do
 Attempts are counted across all the games, so checkpoint names and saves work as with one game.
 
 If you would rather start the game yourself, use `--no-game` and the launcher behaves as it used to -
-just the server, waiting for the mod to connect.
+just the server, waiting for the mod to connect. Autostart is something the launcher asks of the games
+it starts, so a game you start yourself shows the menus: load a save and press P, or add
+`-silksongrl-autostart` to the game's launch options.
 
 Closing the game shuts the launcher down. Ctrl-C stops the server and leaves the game running, since
 killing it mid-episode while the save file is being written is not worth the risk.
@@ -122,7 +124,8 @@ The default starting encounter is Lace 1.
 <br>
 
 With `autostart` on (the default), the game skips the intro and title screen and boots straight from
-the encounter's savestate - you never open a save file. Training starts on its own.
+the encounter's savestate - you never open a save file. Training starts on its own. This only applies
+to games the launcher starts: start the game from Steam and you get the normal menus.
 
 Your save files are safe either way. Once SilksongRL has loaded a savestate, the game's in-memory state
 is training state, so the mod stops the game saving until it closes rather than let an autosave write
@@ -197,6 +200,8 @@ leaves the rest of the file, comments included, alone.
 ### NOTES:
 
 - The game starts muted. For sound, set `Mute = false` under `[Training]` in `BepInEx/config/silksongrl.cfg`.
+
+- While the agent plays, its actions show along the top of the screen, right of Hornet's health, as the output nodes of a network: a group of nodes per choice it makes (move, look, jump, attack/bind, dash), with the chosen ones lit. Doing nothing has no node, so it leaves its group dark. The agent never sees them, since they are drawn after the screen capture. To hide them, set `ShowActions = false` under `[Display]` in `silksongrl.cfg`. The icons are `unity-mod/SilksongRL/Icons/*.png`, built into the DLL: white shapes on a transparent background, tinted dark when drawn, so you can swap in your own.
 
 - To train faster, raise the game speed with `--game-speed` (or `GameSpeed` under `[Training]` in `silksongrl.cfg`). It is applied when the agent takes control, through DebugMod's Timescale, so every game runs at the same speed and DebugMod's panel still shows it. Steps are counted in game time, so the agent acts just as often in game time at any speed. The ping counter is in game time too, and it only times half of each step (getting the action; sending the previous step takes about as long). If it sits around half the step interval (50 ms by default) during fights, steps are being skipped, so lower the speed. Brief spikes when Hornet dies or respawns, and one very large reading when the model updates, are expected.
 

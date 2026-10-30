@@ -17,7 +17,13 @@ namespace SilksongRL
     /// </summary>
     internal static class AutoStart
     {
-        /// <summary>Set from config in RLManager.Awake, before the intro scene runs.</summary>
+        /// <summary>
+        /// Command-line argument the launcher starts the game with. An argument rather than a config
+        /// setting, so starting the game from Steam still gives the normal menus.
+        /// </summary>
+        public const string Argument = "-silksongrl-autostart";
+
+        /// <summary>Set in RLManager.Awake, before the intro scene runs.</summary>
         public static bool Enabled;
 
         // Only a label: SaveSuppression is active before we continue, so nothing is ever written to
