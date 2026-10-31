@@ -19,9 +19,11 @@ ENCOUNTERS: Dict[str, str] = {
     "savage_beastfly": "Savage_Beastfly",
     "savagebeastfly": "Savage_Beastfly",
     "beastfly": "Savage_Beastfly",
+    "karmelita": "Karmelita",
+    "skarrsinger_karmelita": "Karmelita",
 }
 
-ENCOUNTER_CHOICES = ("Lace_1", "Lace_2", "Savage_Beastfly")
+ENCOUNTER_CHOICES = ("Lace_1", "Lace_2", "Savage_Beastfly", "Karmelita")
 
 
 def normalize_encounter(name: str) -> str:

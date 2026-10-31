@@ -68,12 +68,12 @@ def build_server(host: str, port: int):
 
 def apply_mod_config(install, boss, port, eval_mode, step_interval, game_speed):
     """Push launcher options into the mod's config."""
-    # Always written, so the mod dials the port the server is on rather than whatever it last held.
-    values = {("Connection", "Port"): str(port)}
+    # Always written: the port so the mod dials the one the server is on, EvalMode so an --eval
+    # launch does not carry over into the next one.
+    values = {("Connection", "Port"): str(port),
+              ("Training", "EvalMode"): "true" if eval_mode else "false"}
     if boss is not None:
         values[("Training", "TargetBoss")] = boss
-    if eval_mode is not None:
-        values[("Training", "EvalMode")] = "true" if eval_mode else "false"
     if step_interval is not None:
         values[("Training", "StepInterval")] = str(step_interval)
     if game_speed is not None:
@@ -211,10 +211,9 @@ def main():
     parser.add_argument("--boss", "--encounter", dest="boss", metavar="NAME",
                         help=f"Encounter to train on ({', '.join(ENCOUNTER_CHOICES)}). "
                              "Written to the mod's config before launching.")
-    parser.add_argument("--eval", dest="eval_mode", action="store_true", default=None,
-                        help="Run the mod in evaluation mode (inference only, no training).")
-    parser.add_argument("--train", dest="eval_mode", action="store_false",
-                        help="Force training mode, overriding whatever the mod config says.")
+    parser.add_argument("--eval", dest="eval_mode", action="store_true",
+                        help="Run the mod in evaluation mode (inference only, no training) for this "
+                             "launch. Without it, the mod trains.")
     parser.add_argument("--step-interval", type=float, metavar="SECONDS",
                         help="Seconds between RL steps (mod's StepInterval).")
     parser.add_argument("--game-speed", type=float, metavar="X",
@@ -277,10 +276,14 @@ def main():
         sys.exit(0 if ok else 1)
 
     if args.dry_run:
-        current_port = None
+        current_port = current_eval = None
+        eval_value = "true" if args.eval_mode else "false"
         if install is not None:
-            current = ModConfig(install.plugin_config).read("Connection", "Port")
+            config = ModConfig(install.plugin_config)
+            current = config.read("Connection", "Port")
             current_port = None if current is None else current.strip()
+            current = config.read("Training", "EvalMode")
+            current_eval = None if current is None else current.strip().lower()
         if install is not None:
             try:
                 mode = (args.launch_mode if args.launch_mode != "auto"
@@ -301,7 +304,7 @@ def main():
                 filter(None, [
                     f"TargetBoss={boss}" if boss else None,
                     f"Port={port}" if current_port != str(port) else None,
-                    f"EvalMode={args.eval_mode}" if args.eval_mode is not None else None,
+                    f"EvalMode={eval_value}" if current_eval != eval_value else None,
                     f"StepInterval={args.step_interval}" if args.step_interval is not None else None,
                     f"GameSpeed={args.game_speed}" if args.game_speed is not None else None,
                 ])) or "nothing"))

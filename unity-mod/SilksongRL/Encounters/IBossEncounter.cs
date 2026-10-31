@@ -103,32 +103,12 @@ namespace SilksongRL
         /// </summary>
         string GetSavestateFile();
 
-
-        // NOTE:
-        // The following three methods are not currently used.
-        // They were needed because with the previous resetting mechanism
-        // the fight would not trigger immediately. This may still happen
-        // in certain encounters where we cannot reset straight into the fight.
-        // but would first need to move a bit to trigger it so keeping them
-        // just in case.
-
-        /*
         /// <summary>
-        /// Checks if the boss is in a dormant/inactive state.
-        /// Used during reset sequences to determine when the fight can resume.
+        /// Called every frame of a reset once the savestate has loaded and the boss exists, until it
+        /// returns true and the episode starts. Where the savestate drops the hero into the fight this
+        /// is just true; a fight that has to be started is started here, and waited for.
         /// </summary>
-        bool IsBossDormant(HealthManager boss);
-
-        /// <summary>
-        /// Returns the action the hero should take during reset to initiate the fight.
-        /// </summary>
-        Action GetResetAction(HeroController hero, HealthManager boss);
-
-        /// <summary>
-        /// Checks if the reset sequence is complete and training can resume.
-        /// </summary>
-        bool IsResetComplete(HeroController hero, HealthManager boss);
-        */
+        bool StartFight(HealthManager boss);
     }
 }
 

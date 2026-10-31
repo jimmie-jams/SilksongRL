@@ -305,6 +305,11 @@ namespace SilksongRL
         {
             return "lace_1.json";
         }
+
+        public bool StartFight(HealthManager boss)
+        {
+            return true;
+        }
     }
 
 }

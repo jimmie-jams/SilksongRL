@@ -20,6 +20,8 @@ Reinforcement learning system for training AI agents to play Hollow Knight: Silk
 
 🔲 **Savage Beastfly**
 
+🔲 **Skarrsinger Karmelita**
+
 ## Overview
 
 This project combines a Unity mod with a Python-based RL training pipeline to teach agents how to fight bosses using PPO (Proximal Policy Optimization). Still working on extending this to other RL algorithms.

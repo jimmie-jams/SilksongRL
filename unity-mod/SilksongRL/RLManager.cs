@@ -236,6 +236,8 @@ namespace SilksongRL
                     return new LaceSecondEncounter();
                 case "Savage_Beastfly":
                     return new SavageBeastflyEncounter();
+                case "Karmelita":
+                    return new KarmelitaEncounter();
                 default:
                     return null;
             }
@@ -389,6 +391,8 @@ namespace SilksongRL
             // Handle reset sequence if needed
             if (episodeManager.HandleResetSequence(Hero, Boss))
             {
+                // Otherwise the last episode's final action stays held, through any fight intro too
+                currentAction = new Action();
                 return; // Skip normal step processing during reset
             }
 

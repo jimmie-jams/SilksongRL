@@ -12,8 +12,8 @@ python launch.py --boss Lace_1
 ```
 
 `--boss` writes `TargetBoss` into the mod's config before launching, so you no longer need to edit
-`silksongrl.cfg` by hand to change encounter. Accepted names are `Lace_1`, `Lace_2` and
-`Savage_Beastfly` (spellings like `lace2` or `beastfly` work too).
+`silksongrl.cfg` by hand to change encounter. Accepted names are `Lace_1`, `Lace_2`,
+`Savage_Beastfly` and `Karmelita` (spellings like `lace2` or `beastfly` work too).
 
 The server has to be listening before the game starts, because the mod connects out to it and only
 retries a few times. The launcher handles that ordering for you - it waits for the socket to bind
@@ -44,7 +44,7 @@ a run does not start.
 | Option | Effect |
 |--------|--------|
 | `--boss NAME` | Encounter to train on |
-| `--eval` / `--train` | Evaluation (inference only) or training mode |
+| `--eval` | Evaluation mode (inference only) for this launch; without it, training |
 | `--step-interval S` | Seconds between RL steps |
 | `--game-speed X` | Game speed while the agent plays, e.g. `2` for double speed |
 | `--port N` | Server port, set on both sides |

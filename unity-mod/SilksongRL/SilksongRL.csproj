@@ -123,6 +123,7 @@
     <Compile Include="ActionOverlay.cs" />
     <Compile Include="Encounters\BossStateLogger.cs" />
     <Compile Include="Encounters\IBossEncounter.cs" />
+    <Compile Include="Encounters\KarmelitaEncounter.cs" />
     <Compile Include="Encounters\LaceEncounter.cs" />
     <Compile Include="Encounters\LaceSecondEncounter.cs" />
     <Compile Include="Encounters\SavageBeastflyEncounter.cs" />

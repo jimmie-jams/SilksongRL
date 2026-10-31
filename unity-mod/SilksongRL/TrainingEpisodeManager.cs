@@ -247,7 +247,7 @@ namespace SilksongRL
         }
 
         /// <summary>
-        /// Waits for DebugMod to finish loading and for the boss to exist again.
+        /// Waits for DebugMod to finish loading, for the boss to exist again and for its fight to start.
         /// SaveState.loadingSavestate tells us exactly when the load is done, so there is nothing
         /// to guess at with delays.
         /// </summary>
@@ -274,6 +274,16 @@ namespace SilksongRL
                     FailReset(
                         $"the boss did not appear within {LOAD_TIMEOUT_SECONDS}s of the savestate load. " +
                         "Does this savestate drop the hero into the encounter?");
+                    return false;
+                }
+                return true;
+            }
+
+            if (!encounter.StartFight(boss))
+            {
+                if (timedOut)
+                {
+                    FailReset($"the fight did not start within {LOAD_TIMEOUT_SECONDS}s of the savestate load");
                     return false;
                 }
                 return true;

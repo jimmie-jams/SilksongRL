@@ -227,6 +227,11 @@ namespace SilksongRL
             return "savage_beastfly.json";
         }
 
+        public bool StartFight(HealthManager boss)
+        {
+            return true;
+        }
+
     }
 }
 

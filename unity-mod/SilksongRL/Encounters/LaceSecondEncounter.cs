@@ -277,6 +277,11 @@ namespace SilksongRL
             return "lace_2.json";
         }
 
+        public bool StartFight(HealthManager boss)
+        {
+            return true;
+        }
+
         /// <summary>
         /// Follows Lace's Control FSM every frame, since observations only come every StepInterval
         /// and would otherwise see an attack start up to a step late. Lives on the boss, so every
