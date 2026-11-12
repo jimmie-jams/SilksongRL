@@ -117,10 +117,14 @@
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>$(GameDir)\Hollow Knight Silksong_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameDir)\Hollow Knight Silksong_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ActionManager.cs" />
     <Compile Include="ActionOverlay.cs" />
+    <Compile Include="BossHealthBar.cs" />
     <Compile Include="Encounters\BossStateLogger.cs" />
     <Compile Include="Encounters\IBossEncounter.cs" />
     <Compile Include="Encounters\KarmelitaEncounter.cs" />

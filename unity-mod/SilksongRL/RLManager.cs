@@ -50,6 +50,8 @@ namespace SilksongRL
         
         public static ActionSpaceType CurrentActionSpaceType => 
             currentEncounter?.GetActionSpaceType() ?? ActionSpaceType.Basic;
+
+        public static float BossMaxHP => currentEncounter?.GetMaxHP() ?? 0f;
         
         private TrainingEpisodeManager episodeManager;
         private EncounterSaveState encounterSaveState;
@@ -66,14 +68,24 @@ namespace SilksongRL
 
         private float lastStepTime = 0f;
 
+        // Holds the game still while a step is late, e.g. while the server trains
+        private TimeManager.TimeControlInstance serverPause;
+        private float serverPauseStartReal;
+
         // Per-episode step accounting, logged when the episode ends
-        private int stepsDue, stepsSkipped, transitionsSent, stepsTimed;
+        private int stepsDue, transitionsSent, stepsTimed;
         private double stepMsTotal;
+        private float pausedReal;
         private float episodeStartReal, episodeStartGame, resetStartReal = -1f;
 
         // How the episode that just ended went, sent along with its final transition
         private int episodeEndBossHp;
         private float episodeEndSeconds;
+
+        // Real seconds to hold after a win before resetting, so the kill plays out at any game speed
+        private const float WinPauseSeconds = 5.5f;
+        private float winTime = float.NegativeInfinity;
+        private bool hasActed; // this episode, in training or eval
 
         // P, or AutoStart, arms the run; agent control switches on once the game has been ready for
         // ReadySeconds. Enabling it any earlier - during the intro, say - makes the first reset load a
@@ -124,6 +136,11 @@ namespace SilksongRL
                     "If true, show the agent's actions as lit nodes along the top, right of Hornet's health. " +
                     "The agent never sees them: they are drawn after the screen capture.").Value)
                 gameObject.AddComponent<ActionOverlay>();
+
+            if (Config.Bind("Display", "ShowBossHealth", true,
+                    "If true, show the boss's health as a bar along the bottom of the screen. " +
+                    "The agent never sees it: it is drawn after the screen capture.").Value)
+                gameObject.AddComponent<BossHealthBar>().Initialize(configTargetBoss.Value);
 
             stepInterval = configStepInterval.Value;
             isInEval = configEvalMode.Value;
@@ -304,7 +321,14 @@ namespace SilksongRL
 
             if (isArmed)
                 UpdateArming();
-            
+
+            if (serverPause != null && (!isProcessingStep || !isAgentControlEnabled))
+            {
+                serverPause.Release();
+                serverPause = null;
+                pausedReal += Time.realtimeSinceStartup - serverPauseStartReal;
+            }
+
             // Toggle the screen capture test tool (and log resolution diagnostics) when pressing L
             if (Input.GetKeyDown(KeyCode.L))
             {
@@ -388,6 +412,19 @@ namespace SilksongRL
                 RecordEpisodeEnd();
             }
 
+            // A win. Starting outside the arena also reads as BossDead, but before any action.
+            if (hasActed &&
+                previousState == TrainingEpisodeManager.EpisodeState.Training &&
+                episodeManager.CurrentState == TrainingEpisodeManager.EpisodeState.BossDead)
+                winTime = Time.unscaledTime;
+
+            if (Time.unscaledTime - winTime < WinPauseSeconds)
+            {
+                currentAction = new Action();
+                resetStartReal = Time.realtimeSinceStartup; // so "Reset took" leaves the pause out
+                return;
+            }
+
             // Handle reset sequence if needed
             if (episodeManager.HandleResetSequence(Hero, Boss))
             {
@@ -399,6 +436,17 @@ namespace SilksongRL
             // Step on a **frame independent** fixed time interval 
             if (Time.fixedTime - lastStepTime >= stepInterval)
             {
+                // The last step has no action yet. Pause until it does (Update resumes) rather
+                // than play on with the old one.
+                if (isProcessingStep)
+                {
+                    if (serverPause == null)
+                    {
+                        serverPause = TimeManager.CreateTimeControl(0f);
+                        serverPauseStartReal = Time.realtimeSinceStartup;
+                    }
+                    return;
+                }
                 lastStepTime = Time.fixedTime;
                 _ = StepRLAsync();
             }
@@ -407,12 +455,6 @@ namespace SilksongRL
         private async Task StepRLAsync()
         {
             stepsDue++;
-            if (isProcessingStep)
-            {
-                stepsSkipped++;
-                return;
-            }
-
             isProcessingStep = true;
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -468,6 +510,7 @@ namespace SilksongRL
                 if (action != null)
                 {
                     currentAction = action;
+                    hasActed = true;
 
                     // Only track previous state during training (needed for storing transitions)
                     if (!isInEval)
@@ -492,8 +535,8 @@ namespace SilksongRL
 
         /// <summary>
         /// Keeps the boss's remaining HP and the fight's length for the final transition, and logs
-        /// how many steps the episode got, then starts counting the next one. A step is skipped when
-        /// the previous one has not finished.
+        /// how many steps the episode got, then starts counting the next one. Paused is real time
+        /// spent waiting on late steps.
         /// </summary>
         private void RecordEpisodeEnd()
         {
@@ -502,12 +545,13 @@ namespace SilksongRL
             episodeEndBossHp = Boss != null ? Boss.hp : 0;
             episodeEndSeconds = fightGame;
             StaticLogger.LogInfo(
-                $"[RL] Episode stats: {fightGame:F1}s game, {fightReal:F1}s real, {stepsDue} steps due, " +
-                $"{stepsSkipped} skipped, {transitionsSent} transitions sent, " +
+                $"[RL] Episode stats: {fightGame:F1}s game, {fightReal:F1}s real ({pausedReal:F1}s paused), " +
+                $"{stepsDue} steps, {transitionsSent} transitions sent, " +
                 $"{(stepsTimed > 0 ? stepMsTotal / stepsTimed : 0):F0} ms per step");
 
-            stepsDue = stepsSkipped = transitionsSent = stepsTimed = 0;
+            stepsDue = transitionsSent = stepsTimed = 0;
             stepMsTotal = 0;
+            pausedReal = 0;
             resetStartReal = Time.realtimeSinceStartup;
         }
 
@@ -542,6 +586,7 @@ namespace SilksongRL
             hasPreviousStep = false;
             pendingDoneTransition = false;
             whoDied = -1;
+            hasActed = false;
 
             isArmed = true;
             readySince = -1f;
@@ -612,6 +657,7 @@ namespace SilksongRL
             // because we need to store the final transition with done=true on the first step of the new episode
             currentAction = new Action();
             isProcessingStep = false;
+            hasActed = false;
 
             if (resetStartReal >= 0f)
                 StaticLogger.LogInfo($"[RL] Reset took {Time.realtimeSinceStartup - resetStartReal:F1}s real");

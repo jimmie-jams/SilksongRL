@@ -27,6 +27,9 @@ namespace SilksongRL
         // Sizes and positions as fractions of the screen height, which the HUD scales with
         private const float NodeSize = 0.068f;
         private const float Left = 0.74f; // first node's left edge, clear of 10 masks
+        // Smaller and further left while the capture preview takes the top right
+        private const float PreviewNodeSize = 0.058f;
+        private const float PreviewLeft = 0.685f;
         private const float Top = 0.09f;  // node centres
 
         // In node sizes
@@ -78,8 +81,9 @@ namespace SilksongRL
                 return;
 
             int[] shape = ActionManager.GetActionSpaceShape(RLManager.CurrentActionSpaceType);
-            float d = Mathf.Round(Screen.height * NodeSize);
-            float left = Screen.height * Left + d / 2;
+            bool preview = ScreenCaptureTest.ShowPreview;
+            float d = Mathf.Round(Screen.height * (preview ? PreviewNodeSize : NodeSize));
+            float left = Screen.height * (preview ? PreviewLeft : Left) + d / 2;
             float right = left;
             float headLeft = left;
             for (int h = 0; h < shape.Length; h++)

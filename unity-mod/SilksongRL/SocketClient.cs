@@ -245,7 +245,9 @@ namespace SilksongRL
                 var (msgType, responseJson) = await ReceiveMessageAsync().ConfigureAwait(false);
                 
                 stopwatch.Stop();
-                lastPingMs = (float)stopwatch.Elapsed.TotalMilliseconds * Time.timeScale;
+                // Not while paused for a late step, it would read 0
+                if (Time.timeScale > 0f)
+                    lastPingMs = (float)stopwatch.Elapsed.TotalMilliseconds * Time.timeScale;
 
                 if (msgType == MessageType.ActionResponse)
                 {

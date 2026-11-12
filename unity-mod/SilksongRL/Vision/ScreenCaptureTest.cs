@@ -25,9 +25,8 @@ namespace SilksongRL
     {
         private ScreenCapture screenCapture;
         private Texture2D displayTexture;
-        private bool showPreview = false;
+        public static bool ShowPreview { get; private set; }
         private bool cropAdjustMode = false;
-        private string lastSavePath = "";
         private int captureCount = 0;
 
         // Used when the encounter has no visual observation to copy
@@ -70,7 +69,9 @@ namespace SilksongRL
             displayTexture = new Texture2D(captureWidth, captureHeight, TextureFormat.RGB24, false);
             displayTexture.filterMode = FilterMode.Point;
 
-            previewRect = new Rect(10, 10, captureWidth * PREVIEW_SCALE, captureHeight * PREVIEW_SCALE);
+            // Top right, under the ping
+            float w = captureWidth * PREVIEW_SCALE;
+            previewRect = new Rect(Screen.width - w - 10, 40, w, captureHeight * PREVIEW_SCALE);
         }
 
         private void Start()
@@ -102,8 +103,8 @@ namespace SilksongRL
             // F9: Toggle live preview
             if (Input.GetKeyDown(KeyCode.F9))
             {
-                showPreview = !showPreview;
-                RLManager.StaticLogger?.LogInfo($"Preview display: {(showPreview ? "ON" : "OFF")}");
+                ShowPreview = !ShowPreview;
+                RLManager.StaticLogger?.LogInfo($"Preview display: {(ShowPreview ? "ON" : "OFF")}");
             }
             
             // F10: Toggle crop adjustment mode
@@ -114,7 +115,7 @@ namespace SilksongRL
             }
             
             // Crop adjustment controls (only when preview is on and adjust mode is active)
-            if (showPreview && cropAdjustMode)
+            if (ShowPreview && cropAdjustMode)
             {
                 HandleCropAdjustment();
             }
@@ -180,7 +181,7 @@ namespace SilksongRL
 
         private void LateUpdate()
         {
-            if (showPreview)
+            if (ShowPreview)
             {
                 StartCoroutine(UpdatePreview());
             }
@@ -219,7 +220,6 @@ namespace SilksongRL
             string colorPath = savePath.Replace(".png", "_color.png");
             SaveColorCapture(colorPath);
             
-            lastSavePath = savePath;
             captureCount++;
             
             var (croppedW, croppedH) = screenCapture.GetCroppedDimensions();
@@ -294,42 +294,28 @@ namespace SilksongRL
                 selectedStyle.normal.textColor = Color.yellow;
             }
             
-            if (showPreview && displayTexture != null)
+            if (ShowPreview && displayTexture != null)
             {
                 GUI.DrawTexture(new Rect(previewRect.x - 2, previewRect.y - 2, 
                     previewRect.width + 4, previewRect.height + 4), Texture2D.blackTexture);
                 
                 GUI.DrawTexture(previewRect, displayTexture);
                 
-                float infoY = previewRect.y + previewRect.height + 5;
-                GUI.Label(new Rect(previewRect.x, infoY, 300, 20), 
-                    $"Output: {captureWidth}x{captureHeight}", normalStyle);
-                
                 if (cropAdjustMode)
                 {
-                    float cropInfoY = infoY + 20;
-                    GUI.Label(new Rect(previewRect.x, cropInfoY, 300, 20), 
+                    // Labels are 335 wide, so right-aligned to stay on screen
+                    float cropInfoX = previewRect.xMax - 335;
+                    float cropInfoY = previewRect.y + previewRect.height + 5;
+                    GUI.Label(new Rect(cropInfoX, cropInfoY, 300, 20), 
                         "Crop Margins (Tab to select, ↑↓ to adjust):", normalStyle);
                     
                     cropInfoY += 18;
-                    DrawMarginLabel(previewRect.x, cropInfoY, "Top", cropTop, CropMargin.Top);
-                    DrawMarginLabel(previewRect.x + 80, cropInfoY, "Bottom", cropBottom, CropMargin.Bottom);
-                    DrawMarginLabel(previewRect.x + 175, cropInfoY, "Left", cropLeft, CropMargin.Left);
-                    DrawMarginLabel(previewRect.x + 255, cropInfoY, "Right", cropRight, CropMargin.Right);
+                    DrawMarginLabel(cropInfoX, cropInfoY, "Top", cropTop, CropMargin.Top);
+                    DrawMarginLabel(cropInfoX + 80, cropInfoY, "Bottom", cropBottom, CropMargin.Bottom);
+                    DrawMarginLabel(cropInfoX + 175, cropInfoY, "Left", cropLeft, CropMargin.Left);
+                    DrawMarginLabel(cropInfoX + 255, cropInfoY, "Right", cropRight, CropMargin.Right);
                 }
             }
-            
-            string helpText = "F8: Save | F9: Preview | F10: Crop Adjust";
-            if (cropAdjustMode)
-            {
-                helpText += " [ACTIVE - Tab/↑↓/Shift]";
-            }
-            if (!string.IsNullOrEmpty(lastSavePath))
-            {
-                helpText += $"\nLast: {Path.GetFileName(lastSavePath)}";
-            }
-            
-            GUI.Label(new Rect(10, Screen.height - 50, 500, 45), helpText, normalStyle);
         }
 
         private void DrawMarginLabel(float x, float y, string name, int value, CropMargin margin)
@@ -354,6 +340,7 @@ namespace SilksongRL
 
         private void OnDestroy()
         {
+            ShowPreview = false;
             screenCapture?.Dispose();
             
             if (displayTexture != null)
