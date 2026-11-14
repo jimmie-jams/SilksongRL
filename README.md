@@ -16,7 +16,13 @@ Reinforcement learning system for training AI agents to play Hollow Knight: Silk
 
 <img width="1920" height="1080" alt="THUMBNAIL" src="https://github.com/user-attachments/assets/5babba46-4ce9-4d57-9888-58e99de16125" />
 
-🔲 **Lace 2**
+✅ **Lace 2** (1.5x speed, middle of the fight at 3x)
+
+The agent sees a 100x100 grayscale capture of the arena plus 30 numbers on Hornet and Lace, including which attack Lace is in and how far into it she is. It trained for 78,800 episodes (5,127 PPO updates), got its first kill at episode 41,929, and finished winning about 40% of training fights. In evaluation it won 10 of 22.
+
+<img width="2100" alt="Lace 2 training" src="media/Lace 2/lace2_training.png" />
+
+<img width="2100" alt="Lace 2 PPO updates" src="media/Lace 2/lace2_ppo_updates.png" />
 
 🔲 **Savage Beastfly**
 
