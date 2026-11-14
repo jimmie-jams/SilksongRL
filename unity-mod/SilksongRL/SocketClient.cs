@@ -22,6 +22,7 @@ namespace SilksongRL
     public class StateRequest
     {
         public float[] state;
+        public bool episode_start;  // First action of the episode
     }
 
     [Serializable]
@@ -49,10 +50,11 @@ namespace SilksongRL
         public string boss_name;
         public int observation_size;
         public int[] action_space_shape;
-        public string observation_type;  // "vector" or "hybrid"
+        public string observation_type;  // "vector", "hybrid" or "visual"
         public int vector_obs_size;      // Size of vector portion (for hybrid, this is before visual data)
         public int visual_width;         // Width of visual observation (0 if vector-only)
         public int visual_height;        // Height of visual observation (0 if vector-only)
+        public int visual_frames;        // Latest frames the policy sees, stacked by the server (0 if vector-only)
     }
 
     [Serializable]
@@ -177,7 +179,7 @@ namespace SilksongRL
             }
         }
 
-        public async Task<InitResponse> InitializeAsync(string bossName, int observationSize, int[] actionSpaceShape, ObservationType observationType, int vectorObsSize, int visualWidth = 0, int visualHeight = 0)
+        public async Task<InitResponse> InitializeAsync(string bossName, int observationSize, int[] actionSpaceShape, ObservationType observationType, int vectorObsSize, int visualWidth = 0, int visualHeight = 0, int visualFrames = 0)
         {
             await socketLock.WaitAsync().ConfigureAwait(false);
             try
@@ -189,10 +191,11 @@ namespace SilksongRL
                     boss_name = bossName,
                     observation_size = observationSize,
                     action_space_shape = actionSpaceShape,
-                    observation_type = observationType == ObservationType.Hybrid ? "hybrid" : "vector",
+                    observation_type = observationType.ToString().ToLowerInvariant(),
                     vector_obs_size = vectorObsSize,
                     visual_width = visualWidth,
-                    visual_height = visualHeight
+                    visual_height = visualHeight,
+                    visual_frames = visualFrames
                 };
 
                 string json = JsonUtility.ToJson(request);
@@ -227,7 +230,7 @@ namespace SilksongRL
             }
         }
 
-        public async Task<Action> GetActionAsync(float[] observations)
+        public async Task<Action> GetActionAsync(float[] observations, bool episodeStart)
         {
             // Acquire lock to prevent concurrent socket operations
             await socketLock.WaitAsync().ConfigureAwait(false);
@@ -235,7 +238,7 @@ namespace SilksongRL
             {
                 if (!await EnsureConnectedAsync().ConfigureAwait(false)) return null;
 
-                StateRequest request = new StateRequest { state = observations };
+                StateRequest request = new StateRequest { state = observations, episode_start = episodeStart };
                 string json = JsonUtility.ToJson(request);
 
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();

@@ -5,7 +5,8 @@ using UnityEngine;
 namespace SilksongRL
 {
     /// <summary>
-    /// Boss encounter configuration for Skarrsinger Karmelita, with hybrid observations like Lace 2.
+    /// Boss encounter configuration for Skarrsinger Karmelita. The policy sees only the screen, its
+    /// last few frames: the vector part is still sent, for the reward.
     ///
     /// Her fight does not start by itself: she dances in the background until Hornet challenges her,
     /// then sends a gauntlet first. StartFight skips both.
@@ -25,8 +26,9 @@ namespace SilksongRL
 
         private const int VISUAL_WIDTH = 100;
         private const int VISUAL_HEIGHT = 100;
+        private const int VISUAL_FRAMES = 4;
         private const int CROP_TOP = 200;
-        private const int CROP_BOTTOM = 200;
+        private const int CROP_BOTTOM = 100;
         private const int CROP_LEFT = 0;
         private const int CROP_RIGHT = 0;
 
@@ -84,7 +86,7 @@ namespace SilksongRL
 
         public ObservationType GetObservationType()
         {
-            return ObservationType.Hybrid;
+            return ObservationType.Visual;
         }
 
         public int GetVectorObservationSize()
@@ -92,9 +94,9 @@ namespace SilksongRL
             return vectorObsSize;
         }
 
-        public (int width, int height) GetVisualObservationSize()
+        public (int width, int height, int frames) GetVisualObservationSize()
         {
-            return (VISUAL_WIDTH, VISUAL_HEIGHT);
+            return (VISUAL_WIDTH, VISUAL_HEIGHT, VISUAL_FRAMES);
         }
 
         public bool IsEncounterMatch(HealthManager hm)

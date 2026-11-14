@@ -19,6 +19,7 @@ namespace SilksongRL
 
         private const int VISUAL_WIDTH = 84;
         private const int VISUAL_HEIGHT = 84;
+        private const int VISUAL_FRAMES = 1;
         private const int CROP_TOP = 140;
         private const int CROP_BOTTOM = 150;
         private const int CROP_LEFT = 60;
@@ -55,9 +56,9 @@ namespace SilksongRL
             return vectorObsSize;
         }
 
-        public (int width, int height) GetVisualObservationSize()
+        public (int width, int height, int frames) GetVisualObservationSize()
         {
-            return (VISUAL_WIDTH, VISUAL_HEIGHT);
+            return (VISUAL_WIDTH, VISUAL_HEIGHT, VISUAL_FRAMES);
         }
 
         public bool IsEncounterMatch(HealthManager hm)

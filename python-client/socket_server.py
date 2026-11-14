@@ -116,7 +116,7 @@ class RLSocketServer:
             if msg_type == MessageType.INITIALIZE:
                 self.handle_initialize(conn, client_id, payload)
             elif msg_type == MessageType.GET_ACTION:
-                self.handle_get_action(conn, payload)
+                self.handle_get_action(conn, client_id, payload)
             elif msg_type == MessageType.STORE_TRANSITION:
                 self.handle_store_transition(conn, client_id, payload)
         except Exception as e:
@@ -131,11 +131,12 @@ class RLSocketServer:
         vector_obs_size = payload.get('vector_obs_size', obs_size)
         visual_width = payload.get('visual_width', 0)
         visual_height = payload.get('visual_height', 0)
+        visual_frames = payload.get('visual_frames', 1)
 
         print(f"[SocketServer] Client {client_id} initializing for boss: {boss_name}")
         print(f"[SocketServer]   Observation size: {obs_size}, type: {observation_type}, vector size: {vector_obs_size}")
-        if observation_type == 'hybrid':
-            print(f"[SocketServer]   Visual size: {visual_width}x{visual_height}")
+        if observation_type != 'vector':
+            print(f"[SocketServer]   Visual size: {visual_width}x{visual_height}, {visual_frames} frame(s)")
 
         with self.model_lock:
             init_response = rl_core.initialize_model(
@@ -145,7 +146,8 @@ class RLSocketServer:
                 observation_type=observation_type,
                 vector_obs_size=vector_obs_size,
                 visual_w=visual_width,
-                visual_h=visual_height
+                visual_h=visual_height,
+                visual_f=visual_frames
             )
 
         response = {
@@ -156,9 +158,9 @@ class RLSocketServer:
         }
         self.send_message(conn, MessageType.INIT_RESPONSE, response)
 
-    def handle_get_action(self, conn: socket.socket, payload: Dict[str, Any]):
+    def handle_get_action(self, conn: socket.socket, client_id: int, payload: Dict[str, Any]):
         with self.model_lock:
-            action = rl_core.get_action(payload['state'])
+            action = rl_core.get_action(client_id, payload['state'], payload.get('episode_start', False))
         self.send_message(conn, MessageType.ACTION_RESPONSE, {'action': action})
 
     def handle_store_transition(self, conn: socket.socket, client_id: int, payload: Dict[str, Any]):

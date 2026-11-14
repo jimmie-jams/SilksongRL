@@ -10,17 +10,22 @@ model: Optional[CustomPPO] = None
 obs_dim: Optional[int] = None
 action_shape: Optional[List[int]] = None
 current_boss: Optional[str] = None
-obs_type: Optional[str] = None          # 'vector' or 'hybrid'
+obs_type: Optional[str] = None          # 'vector', 'hybrid' or 'visual'
 vector_obs_dim: Optional[int] = None    # Size of vector portion
 visual_width: Optional[int] = None      # Width of visual observation (0 if vector-only)
 visual_height: Optional[int] = None     # Height of visual observation (0 if vector-only)
+visual_frames: Optional[int] = None     # Latest frames the policy sees (0 if vector-only)
 checkpoint_loaded = False
+
+# Per game, the frames its last action was chosen from, the latest last
+frame_stacks: Dict[int, np.ndarray] = {}
 
 
 class DummyEnv(gym.Env):
     """
     Minimal env to satisfy SB3.
-    Supports both vector-only and hybrid (vector + visual) observation modes.
+    Supports vector-only, hybrid (vector + visual) and visual-only observations. The visual part
+    is the latest few frames, stacked as channels.
     """
 
     def __init__(
@@ -30,7 +35,8 @@ class DummyEnv(gym.Env):
         observation_type: str = "vector",
         vector_obs_size: int = None,
         visual_w: int = 0,
-        visual_h: int = 0
+        visual_h: int = 0,
+        visual_f: int = 0
     ) -> None:
         super().__init__()
         self.obs_size = obs_size
@@ -38,13 +44,13 @@ class DummyEnv(gym.Env):
         self.vector_obs_size = vector_obs_size if vector_obs_size else obs_size
         self.visual_width = visual_w
         self.visual_height = visual_h
-        
-        if observation_type == "hybrid" and visual_w > 0 and visual_h > 0:
-            # Dict observation space for hybrid: separate vector and visual
-            self.observation_space = spaces.Dict({
-                "vector": spaces.Box(0.0, 1.0, shape=(self.vector_obs_size,), dtype=np.float32),
-                "visual": spaces.Box(0.0, 1.0, shape=(1, visual_h, visual_w), dtype=np.float32),  # (C, H, W)
-            })
+
+        if observation_type != "vector" and visual_w > 0 and visual_h > 0:
+            # Dict observation space: the visual part, and for hybrid the vector part
+            visual = spaces.Box(0.0, 1.0, shape=(visual_f, visual_h, visual_w), dtype=np.float32)  # (C, H, W)
+            vector = spaces.Box(0.0, 1.0, shape=(self.vector_obs_size,), dtype=np.float32)
+            self.observation_space = spaces.Dict(
+                {"vector": vector, "visual": visual} if observation_type == "hybrid" else {"visual": visual})
         else:
             # Flat observation space for vector-only
             self.observation_space = spaces.Box(0.0, 1.0, shape=(obs_size,), dtype=np.float32)
@@ -53,13 +59,9 @@ class DummyEnv(gym.Env):
 
     def _make_obs(self) -> Any:
         """Create a zero observation matching the observation space."""
-        if self.observation_type == "hybrid" and self.visual_width > 0:
-            return {
-                "vector": np.zeros(self.vector_obs_size, dtype=np.float32),
-                "visual": np.zeros((1, self.visual_height, self.visual_width), dtype=np.float32),
-            }
-        else:
-            return np.zeros(self.obs_size, dtype=np.float32)
+        if isinstance(self.observation_space, spaces.Dict):
+            return {key: np.zeros(space.shape, dtype=np.float32) for key, space in self.observation_space.items()}
+        return np.zeros(self.obs_size, dtype=np.float32)
 
     def reset(
         self,
@@ -80,20 +82,21 @@ def initialize_model(
     observation_type: str = "vector",
     vector_obs_size: int = None,
     visual_w: int = 0,
-    visual_h: int = 0
+    visual_h: int = 0,
+    visual_f: int = 0
 ) -> Dict[str, Any]:
     """
     Initialize or load model; returns metadata about the initialization. Only the first game to
     connect builds the model. The others join it, and must be playing the same thing.
     """
     global model, obs_dim, action_shape, current_boss, obs_type, vector_obs_dim
-    global visual_width, visual_height, checkpoint_loaded
+    global visual_width, visual_height, visual_frames, checkpoint_loaded
 
     if model is not None:
         joining = (boss_name, obs_size, list(action_space_shape or []), observation_type,
-                   vector_obs_size, visual_w, visual_h)
+                   vector_obs_size, visual_w, visual_h, visual_f)
         running = (current_boss, obs_dim, list(action_shape or []), obs_type,
-                   vector_obs_dim, visual_width, visual_height)
+                   vector_obs_dim, visual_width, visual_height, visual_frames)
         if joining != running:
             raise ValueError(
                 f"The server is already training {current_boss} (observation size {obs_dim}, "
@@ -112,14 +115,16 @@ def initialize_model(
     vector_obs_dim = vector_obs_size
     visual_width = visual_w
     visual_height = visual_h
+    visual_frames = visual_f
     action_shape = action_space_shape
 
     checkpoint_path = latest_checkpoint(boss_name)
 
     print(f"[RLCore] Observation type: {obs_type}")
     print(f"[RLCore] Total obs size: {obs_dim}, Vector obs size: {vector_obs_dim}")
-    if obs_type == "hybrid":
-        print(f"[RLCore] Visual obs: {visual_width}x{visual_height} ({visual_width * visual_height})")
+    if obs_type != "vector":
+        print(f"[RLCore] Visual obs: {visual_frames} frame(s) of {visual_width}x{visual_height}"
+              + (", vector only used for the reward" if obs_type == "visual" else ""))
     print(f"[RLCore] Action space shape: {action_space_shape}")
 
     env = DummyEnv(
@@ -128,11 +133,12 @@ def initialize_model(
         observation_type=observation_type,
         vector_obs_size=vector_obs_size,
         visual_w=visual_w,
-        visual_h=visual_h
+        visual_h=visual_h,
+        visual_f=visual_f
     )
     
 
-    if observation_type == "hybrid" and visual_w > 0:
+    if isinstance(env.observation_space, spaces.Dict):
         policy = "MultiInputPolicy"
         # The screen arrives as floats already in [0, 1]. SB3 only gives uint8 spaces a CNN unless
         # told the image is normalized, and would otherwise flatten it into the MLP.
@@ -196,24 +202,31 @@ def initialize_model(
 
 
 def _convert_to_obs(state: List[float]) -> Any:
-    """Convert flat state array to observation format (flat or dict)."""
-    if obs_type == "hybrid" and visual_width > 0:
-        state_arr = np.array(state, dtype=np.float32)
-        return {
-            "vector": state_arr[:vector_obs_dim],
-            "visual": state_arr[vector_obs_dim:].reshape(1, visual_height, visual_width),  # (C, H, W)
-        }
-    else:
-        return np.array(state, dtype=np.float32)
+    """Convert flat state array to observation format (flat, or dict with the one frame sent)."""
+    state_arr = np.array(state, dtype=np.float32)
+    if obs_type == "vector" or visual_width == 0:
+        return state_arr
+    obs = {"visual": state_arr[vector_obs_dim:].reshape(1, visual_height, visual_width)}  # (C, H, W)
+    if obs_type == "hybrid":
+        obs["vector"] = state_arr[:vector_obs_dim]
+    return obs
 
 
-def get_action(state: List[float]) -> List[int]:
+def get_action(game_id: int, state: List[float], episode_start: bool = False) -> List[int]:
     if model is None:
         raise ValueError("Model not initialized")
     if len(state) != obs_dim:
         raise ValueError(f"Expected obs size {obs_dim}, got {len(state)}")
 
     obs = _convert_to_obs(state)
+    if isinstance(obs, dict):
+        # An episode starts with copies of its first frame
+        stack = frame_stacks.get(game_id)
+        if episode_start or stack is None:
+            stack = np.repeat(obs["visual"], visual_frames, axis=0)
+        else:
+            stack = np.concatenate([stack[1:], obs["visual"]])
+        frame_stacks[game_id] = obs["visual"] = stack
     action, _ = model.predict(obs, deterministic=False)
     return action.tolist()
 
@@ -229,11 +242,20 @@ def store_transition(game_id: int, state: List[float], action: List[int], reward
 
     obs = _convert_to_obs(state)
     next_obs = _convert_to_obs(next_state)
+    if isinstance(obs, dict):
+        # state is what the game's last action was chosen from, so get_action stacked it already.
+        # None if the server restarted since.
+        stack = frame_stacks.get(game_id)
+        if stack is None:
+            stack = np.repeat(obs["visual"], visual_frames, axis=0)
+        obs["visual"] = stack
+        next_obs["visual"] = np.concatenate([stack[1:], next_obs["visual"]])
     model.store_transition(game_id, obs, action, reward, next_obs, done, boss_hp, episode_seconds)
 
 
 def remove_game(game_id: int) -> None:
     """A game disconnected: forget its unfinished steps."""
+    frame_stacks.pop(game_id, None)
     if model is not None:
         model.remove_game(game_id)
 

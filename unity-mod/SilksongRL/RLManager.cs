@@ -174,16 +174,16 @@ namespace SilksongRL
                 return;
             }
 
-            // Initialize screen capture updater for hybrid encounters
+            // Initialize screen capture updater for encounters that see the screen
             // This isn't done in Awake because main camera isn't available yet
-            if (currentEncounter.GetObservationType() == ObservationType.Hybrid)
+            if (currentEncounter.GetObservationType() != ObservationType.Vector)
             {
                 var screenCapture = currentEncounter.GetScreenCapture();
                 if (screenCapture != null)
                 {
                     var updater = gameObject.AddComponent<ScreenCaptureUpdater>();
                     updater.Initialize(screenCapture);
-                    StaticLogger.LogInfo("[RL] Screen capture updater initialized for hybrid observation");
+                    StaticLogger.LogInfo("[RL] Screen capture updater initialized for visual observation");
                 }
             }
             
@@ -284,14 +284,14 @@ namespace SilksongRL
                 int[] actionSpaceShape = ActionManager.GetActionSpaceShape(CurrentActionSpaceType);
                 ObservationType obsType = currentEncounter.GetObservationType();
                 int vectorObsSize = currentEncounter.GetVectorObservationSize();
-                var (visualWidth, visualHeight) = currentEncounter.GetVisualObservationSize();
+                var (visualWidth, visualHeight, visualFrames) = currentEncounter.GetVisualObservationSize();
                 
                 StaticLogger.LogInfo($"[RL] Initializing client for boss: {bossName}");
                 StaticLogger.LogInfo($"[RL]   Observation size: {obsSize}, type: {obsType}, vector size: {vectorObsSize}");
-                if (obsType == ObservationType.Hybrid)
-                    StaticLogger.LogInfo($"[RL]   Visual size: {visualWidth}x{visualHeight}");
+                if (obsType != ObservationType.Vector)
+                    StaticLogger.LogInfo($"[RL]   Visual size: {visualWidth}x{visualHeight}, {visualFrames} frame(s)");
                 
-                var response = await client.InitializeAsync(bossName, obsSize, actionSpaceShape, obsType, vectorObsSize, visualWidth, visualHeight);
+                var response = await client.InitializeAsync(bossName, obsSize, actionSpaceShape, obsType, vectorObsSize, visualWidth, visualHeight, visualFrames);
                 
                 if (response != null && response.initialized)
                 {
@@ -501,10 +501,12 @@ namespace SilksongRL
                     }
                 }
 
-                // Get action from the RL agent
+                // Get action from the RL agent. Its first this episode tells the server to start a
+                // new frame stack.
+                bool episodeStart = !hasActed;
                 Action action = await Task.Run(async () =>
                 {
-                    return await client.GetActionAsync(currentObservations).ConfigureAwait(false);
+                    return await client.GetActionAsync(currentObservations, episodeStart).ConfigureAwait(false);
                 }).ConfigureAwait(false);
 
                 if (action != null)

@@ -60,9 +60,9 @@ namespace SilksongRL
             return vectorObsSize;
         }
 
-        public (int width, int height) GetVisualObservationSize()
+        public (int width, int height, int frames) GetVisualObservationSize()
         {
-            return (0, 0);
+            return (0, 0, 0);
         }
 
         public bool IsEncounterMatch(HealthManager hm)

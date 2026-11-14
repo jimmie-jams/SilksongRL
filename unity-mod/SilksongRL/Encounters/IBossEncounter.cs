@@ -12,7 +12,11 @@ namespace SilksongRL
         Vector,
 
         // Hybrid: [vector_obs | visual_obs] - split and process separately
-        Hybrid
+        Hybrid,
+
+        // Visual: sent like Hybrid, but the vector is only there for the reward. The policy sees
+        // just the screen.
+        Visual
     }
 
     /// <summary>
@@ -48,10 +52,11 @@ namespace SilksongRL
         int GetVectorObservationSize();
 
         /// <summary>
-        /// Gets the visual observation dimensions.
-        /// Returns (0, 0) for vector-only observations.
+        /// Gets the visual observation dimensions, and how many of the latest frames the policy sees.
+        /// Only the latest is sent: the server stacks them per game.
+        /// Returns (0, 0, 0) for vector-only observations.
         /// </summary>
-        (int width, int height) GetVisualObservationSize();
+        (int width, int height, int frames) GetVisualObservationSize();
 
         /// <summary>
         /// Checks if the given HealthManager matches this encounter.
