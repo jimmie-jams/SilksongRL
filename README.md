@@ -1,3 +1,7 @@
+
+
+
+
 # SilksongRL
 
 Reinforcement learning system for training AI agents to play Hollow Knight: Silksong boss encounters.
@@ -19,6 +23,8 @@ Reinforcement learning system for training AI agents to play Hollow Knight: Silk
 ✅ **Lace 2** (1.5x speed, middle of the fight at 3x)
 
 The agent sees a 100x100 grayscale capture of the arena plus 30 numbers on Hornet and Lace, including which attack Lace is in and how far into it she is. It trained for 78,800 episodes (5,127 PPO updates), got its first kill at episode 41,929, and finished winning about 40% of training fights. In evaluation it won 10 of 22.
+
+https://github.com/user-attachments/assets/6bda9ae9-b2cc-46db-bca0-40f3d2e86221
 
 <img width="2100" alt="Lace 2 training" src="media/Lace 2/lace2_training.png" />
 
@@ -148,6 +154,10 @@ Please consult [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)
 - **Frame stacking**: The visual observation is a single frame, so the agent sees where things are but not where they're going. The vector part covers the velocities of Hornet and the boss (and, for Lace 2, which attack she's in and how far into it she is), which may well be enough. Karmelita tries the other way round: the last 4 frames, stacked on the server per game, and no vector at all. Any encounter can stack frames by setting `VISUAL_FRAMES`, but it multiplies the memory the images take up.
 
 - **More bosses**: Adding new bosses is always on the menu. Check out [this PR](https://github.com/jimmie-jams/SilksongRL/pull/2) to get an idea of how it's done. The general idea is you simply need to implement the IBossEncounter interface for another boss. To work out a boss's attacks, set `LogBossStates = true` in silksongrl.cfg and play the fight: every state change of the boss's FSMs gets logged (see [HOW_TO_TRAIN.md](/HOW_TO_TRAIN.md)).
+
+https://github.com/user-attachments/assets/39eb45a9-f014-4208-b1e8-4e6b6bec5326
+
+
 
 - **More algorithms**: Not too high priority for now, but trying out more RL algorithms would be cool.
 
