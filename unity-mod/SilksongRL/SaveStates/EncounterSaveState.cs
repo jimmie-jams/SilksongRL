@@ -118,13 +118,39 @@ namespace SilksongRL
         /// </summary>
         public bool TryLoad()
         {
-            if (!IsReady || !DebugModSaveStates.TryLoad(state))
+            if (!IsReady)
+                return false;
+
+            TrackScenePools();
+            if (!DebugModSaveStates.TryLoad(state))
                 return false;
 
             // Every savestate load goes through here, so this is where the session stops being safe
             // to save.
             SaveSuppression.Activate("a savestate was loaded");
             return true;
+        }
+
+        /// <summary>
+        /// Works around a game bug that leaks about 1,900 objects on every reset, which slows each
+        /// load after it until the game stalls.
+        ///
+        /// When a scene loads, its pool managers (PersonalObjectPool) fill the shared GlobalPool,
+        /// and when the scene unloads the game destroys what the managers it lists for that scene
+        /// filled. A reload of the same scene unloads the old copy after the new one has woken up,
+        /// so the new copy's managers are taken off the list too, before they fill anything. What
+        /// they fill afterwards is never destroyed. Putting them back on the list before each load
+        /// lets the game free them as it would for any other scene.
+        /// </summary>
+        private static void TrackScenePools()
+        {
+            foreach (PersonalObjectPool pool in UnityEngine.Object.FindObjectsByType<PersonalObjectPool>(
+                         UnityEngine.FindObjectsInactive.Include, UnityEngine.FindObjectsSortMode.None))
+            {
+                if (pool.gameObject.scene.name != "DontDestroyOnLoad" &&
+                    !PersonalObjectPool._activePoolManagers.Contains(pool))
+                    PersonalObjectPool._activePoolManagers.Add(pool);
+            }
         }
 
         /// <summary>
