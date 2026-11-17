@@ -161,6 +161,10 @@ https://github.com/user-attachments/assets/39eb45a9-f014-4208-b1e8-4e6b6bec5326
 
 - **More algorithms**: Not too high priority for now, but trying out more RL algorithms would be cool.
 
+## Credits
+
+The bind icon in the action overlay: <a href="https://www.flaticon.com/free-icons/spool-of-thread" title="spool of thread icons">Spool of thread icons created by edt.im - Flaticon</a>
+
 
 
 
