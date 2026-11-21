@@ -11,7 +11,8 @@ namespace SilksongRL
         // Vector only: flat array of state values
         Vector,
 
-        // Hybrid: [vector_obs | visual_obs] - split and process separately
+        // Hybrid: [vector_obs | visual_obs] - split and process separately. Anything after the
+        // visual part is only there for the reward.
         Hybrid,
 
         // Visual: sent like Hybrid, but the vector is only there for the reward. The policy sees

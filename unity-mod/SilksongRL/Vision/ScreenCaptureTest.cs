@@ -65,6 +65,7 @@ namespace SilksongRL
                 $"ScreenCapture Test loaded ({captureWidth}x{captureHeight}). F8=capture, F9=preview, F10=crop adjust");
 
             screenCapture = new ScreenCapture(captureWidth, captureHeight, cropTop, cropBottom, cropLeft, cropRight);
+            screenCapture.SmoothDownscale = encounterCapture != null && encounterCapture.SmoothDownscale;
 
             displayTexture = new Texture2D(captureWidth, captureHeight, TextureFormat.RGB24, false);
             displayTexture.filterMode = FilterMode.Point;

@@ -202,11 +202,13 @@ def initialize_model(
 
 
 def _convert_to_obs(state: List[float]) -> Any:
-    """Convert flat state array to observation format (flat, or dict with the one frame sent)."""
+    """Convert flat state array to observation format (flat, or dict with the one frame sent).
+    Anything after the frame is only there for the game's reward."""
     state_arr = np.array(state, dtype=np.float32)
     if obs_type == "vector" or visual_width == 0:
         return state_arr
-    obs = {"visual": state_arr[vector_obs_dim:].reshape(1, visual_height, visual_width)}  # (C, H, W)
+    frame_end = vector_obs_dim + visual_height * visual_width
+    obs = {"visual": state_arr[vector_obs_dim:frame_end].reshape(1, visual_height, visual_width)}  # (C, H, W)
     if obs_type == "hybrid":
         obs["vector"] = state_arr[:vector_obs_dim]
     return obs

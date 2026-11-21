@@ -5,8 +5,9 @@ using UnityEngine;
 namespace SilksongRL
 {
     /// <summary>
-    /// Boss encounter configuration for Skarrsinger Karmelita. The policy sees only the screen, its
-    /// last few frames: the vector part is still sent, for the reward.
+    /// Boss encounter configuration for Skarrsinger Karmelita. The policy sees the screen, its last
+    /// few frames, and a small vector of what the screen leaves out: Hornet's health and silk and
+    /// Karmelita's health. The full state is sent after the screen, for the reward only.
     ///
     /// Her fight does not start by itself: she dances in the background until Hornet challenges her,
     /// then sends a gauntlet first. StartFight skips both.
@@ -39,7 +40,7 @@ namespace SilksongRL
             CROP_BOTTOM,
             CROP_LEFT,
             CROP_RIGHT
-        );
+        ) { SmoothDownscale = true };
 
         // Attack categories for Karmelita, from her Control FSM
         public enum AttackCategory
@@ -63,9 +64,12 @@ namespace SilksongRL
         // longest chains (the full slash combo, the dash grind): LogBossStates shows the real lengths.
         private const float MAX_ATTACK_TIME = 3f;
 
-        // 17 values about Hornet and Karmelita, then Karmelita's attack (one-hot) and how far into it
-        // she is, then Hornet's silk
-        private readonly int vectorObsSize = 17 + NUM_ATTACK_CATEGORIES + 1 + 1;
+        // The full state: 17 values about Hornet and Karmelita, then Karmelita's attack (one-hot) and
+        // how far into it she is, then Hornet's silk
+        private readonly int stateSize = 17 + NUM_ATTACK_CATEGORIES + 1 + 1;
+
+        // The state indices the policy sees: Hornet's health, her silk, Karmelita's health
+        private static readonly int[] PolicyVector = { 4, 17 + NUM_ATTACK_CATEGORIES + 1, 9 };
 
         // Her states from the background dance to the fight
         private static readonly HashSet<string> IntroStates = new HashSet<string>
@@ -86,12 +90,12 @@ namespace SilksongRL
 
         public ObservationType GetObservationType()
         {
-            return ObservationType.Visual;
+            return ObservationType.Hybrid;
         }
 
         public int GetVectorObservationSize()
         {
-            return vectorObsSize;
+            return PolicyVector.Length;
         }
 
         public (int width, int height, int frames) GetVisualObservationSize()
@@ -115,13 +119,16 @@ namespace SilksongRL
                 return null;
             }
 
-            float[] vectorObs = ExtractVectorObservations(hero, boss);
-            if (vectorObs == null)
+            float[] state = ExtractVectorObservations(hero, boss);
+            if (state == null)
                 return null;
 
-            float[] combined = new float[vectorObsSize + visualObs.Length];
-            System.Array.Copy(vectorObs, 0, combined, 0, vectorObsSize);
-            System.Array.Copy(visualObs, 0, combined, vectorObsSize, visualObs.Length);
+            // [policy vector | screen | state, for the reward only]
+            float[] combined = new float[GetObservationSize()];
+            for (int i = 0; i < PolicyVector.Length; i++)
+                combined[i] = state[PolicyVector[i]];
+            System.Array.Copy(visualObs, 0, combined, PolicyVector.Length, visualObs.Length);
+            System.Array.Copy(state, 0, combined, StateStart, stateSize);
 
             return combined;
         }
@@ -159,7 +166,7 @@ namespace SilksongRL
             float heroHP = Mathf.Clamp01(heroHealth / MAX_HERO_HP);
             float bossHP = Mathf.Clamp01(bossHealth / MAX_BOSS_HP);
 
-            float[] vectorObs = new float[vectorObsSize];
+            float[] vectorObs = new float[stateSize];
             vectorObs[0] = heroX;
             vectorObs[1] = heroY;
             vectorObs[2] = heroVelX;
@@ -193,16 +200,29 @@ namespace SilksongRL
 
         public int GetObservationSize()
         {
-            return vectorObsSize + (VISUAL_WIDTH * VISUAL_HEIGHT);
+            return StateStart + stateSize;
+        }
+
+        private int StateStart => PolicyVector.Length + VISUAL_WIDTH * VISUAL_HEIGHT;
+
+        private float[] State(float[] observation)
+        {
+            float[] state = new float[stateSize];
+            System.Array.Copy(observation, StateStart, state, 0, stateSize);
+            return state;
         }
 
         public float CalculateReward(float[] previousObs, float[] currentObs, int whoDied)
         {
             if (previousObs == null || currentObs == null ||
-                previousObs.Length < vectorObsSize || currentObs.Length < vectorObsSize)
+                previousObs.Length < GetObservationSize() || currentObs.Length < GetObservationSize())
             {
                 return 0f;
             }
+
+            // The rest reads the state, sent after the screen
+            previousObs = State(previousObs);
+            currentObs = State(currentObs);
 
             // Terminal rewards
             if (whoDied == 0)

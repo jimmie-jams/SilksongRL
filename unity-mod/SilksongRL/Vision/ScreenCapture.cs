@@ -31,7 +31,14 @@ namespace SilksongRL
         private int lastScreenHeight;
         
         private float[] cachedObservation;
-        
+
+        /// <summary>
+        /// If true, each observation pixel averages the screen area it covers. If false, it samples
+        /// only the few screen pixels at its centre, so small things can vanish. Checkpoints trained
+        /// on those frames, like Lace 2's, need it left off.
+        /// </summary>
+        public bool SmoothDownscale { get; set; }
+
         private const float LUM_R = 0.2126f;
         private const float LUM_G = 0.7152f;
         private const float LUM_B = 0.0722f;
@@ -144,7 +151,10 @@ namespace SilksongRL
             tempCropped.ReadPixels(cropRect, 0, 0);
             tempCropped.Apply();
             
-            Graphics.Blit(tempCropped, downsizeRenderTexture);
+            if (SmoothDownscale)
+                BlitAveraged(tempCropped, croppedWidth, croppedHeight);
+            else
+                Graphics.Blit(tempCropped, downsizeRenderTexture);
             
             RenderTexture.active = downsizeRenderTexture;
             downsizedTexture.ReadPixels(new Rect(0, 0, targetWidth, targetHeight), 0, 0);
@@ -155,6 +165,34 @@ namespace SilksongRL
             Object.Destroy(tempCropped);
             
             return ToGreyscaleArray(downsizedTexture);
+        }
+
+        /// <summary>
+        /// Downsizes by halving on the GPU while an axis stays at least the target size, then blits
+        /// the rest of the way. A bilinear blit to exactly half averages each 2x2 block, so every
+        /// screen pixel counts, unlike one blit straight down, which samples a few per output pixel.
+        /// </summary>
+        private void BlitAveraged(Texture source, int width, int height)
+        {
+            RenderTexture half = null;
+            while (width / 2 >= targetWidth || height / 2 >= targetHeight)
+            {
+                if (width / 2 >= targetWidth)
+                    width /= 2;
+                if (height / 2 >= targetHeight)
+                    height /= 2;
+
+                RenderTexture next = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
+                next.filterMode = FilterMode.Bilinear;
+                Graphics.Blit(source, next);
+                if (half != null)
+                    RenderTexture.ReleaseTemporary(half);
+                source = half = next;
+            }
+
+            Graphics.Blit(source, downsizeRenderTexture);
+            if (half != null)
+                RenderTexture.ReleaseTemporary(half);
         }
 
         private float[] ToGreyscaleArray(Texture2D texture)
